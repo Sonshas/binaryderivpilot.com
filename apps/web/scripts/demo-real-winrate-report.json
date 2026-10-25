@@ -1,0 +1,6522 @@
+{
+  "report": {
+    "generatedAt": "2026-10-09T07:07:16.892Z",
+    "stakePerTrade": 1,
+    "symbol": "R_10",
+    "settleEngine": "outcome/settle via digit-contracts",
+    "totalTrades": 800,
+    "mismatches": 0,
+    "demo": {
+      "account": "demo",
+      "trades": 400,
+      "won": 360,
+      "lost": 40,
+      "winRatePct": 90,
+      "byKind": [
+        {
+          "kind": "EVEN",
+          "trades": 10,
+          "won": 9,
+          "lost": 1,
+          "winRatePct": 90
+        },
+        {
+          "kind": "ODD",
+          "trades": 10,
+          "won": 9,
+          "lost": 1,
+          "winRatePct": 90
+        },
+        {
+          "kind": "MATCH",
+          "trades": 100,
+          "won": 90,
+          "lost": 10,
+          "winRatePct": 90
+        },
+        {
+          "kind": "DIFFER",
+          "trades": 100,
+          "won": 90,
+          "lost": 10,
+          "winRatePct": 90
+        },
+        {
+          "kind": "OVER",
+          "trades": 90,
+          "won": 81,
+          "lost": 9,
+          "winRatePct": 90
+        },
+        {
+          "kind": "UNDER",
+          "trades": 90,
+          "won": 81,
+          "lost": 9,
+          "winRatePct": 90
+        }
+      ]
+    },
+    "real": {
+      "account": "real",
+      "trades": 400,
+      "won": 360,
+      "lost": 40,
+      "winRatePct": 90,
+      "byKind": [
+        {
+          "kind": "EVEN",
+          "trades": 10,
+          "won": 9,
+          "lost": 1,
+          "winRatePct": 90
+        },
+        {
+          "kind": "ODD",
+          "trades": 10,
+          "won": 9,
+          "lost": 1,
+          "winRatePct": 90
+        },
+        {
+          "kind": "MATCH",
+          "trades": 100,
+          "won": 90,
+          "lost": 10,
+          "winRatePct": 90
+        },
+        {
+          "kind": "DIFFER",
+          "trades": 100,
+          "won": 90,
+          "lost": 10,
+          "winRatePct": 90
+        },
+        {
+          "kind": "OVER",
+          "trades": 90,
+          "won": 81,
+          "lost": 9,
+          "winRatePct": 90
+        },
+        {
+          "kind": "UNDER",
+          "trades": 90,
+          "won": 81,
+          "lost": 9,
+          "winRatePct": 90
+        }
+      ]
+    },
+    "overallWinRatePct": 90,
+    "adminWinRates": {
+      "payoutPercent": 95.22,
+      "demoWinRatePercent": 90,
+      "realWinRatePercent": 90,
+      "vipWinRatePercent": 90,
+      "scannerWinRatePercent": 90
+    }
+  },
+  "rows": [
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "EVEN",
+      "target": null,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "ODD",
+      "target": null,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 0,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 1,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 2,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 3,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 4,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 5,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 6,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 7,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 8,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "MATCH",
+      "target": 9,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 0,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 1,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 2,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 3,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 4,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 5,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 6,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 7,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 8,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "DIFFER",
+      "target": 9,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 0,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 1,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 2,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 3,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 4,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 5,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 6,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 7,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "OVER",
+      "target": 8,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 1,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 2,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 3,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 4,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 5,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 6,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 7,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 8,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 0,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 1,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 2,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 3,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 4,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 5,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 6,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 7,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 8,
+      "outcome": "won",
+      "expected": "won"
+    },
+    {
+      "account": "demo",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    },
+    {
+      "account": "real",
+      "kind": "UNDER",
+      "target": 9,
+      "exitDigit": 9,
+      "outcome": "lost",
+      "expected": "lost"
+    }
+  ]
+}

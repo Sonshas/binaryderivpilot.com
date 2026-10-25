@@ -1,0 +1,1074 @@
+{
+  "totalSettleCases": 420,
+  "wins": 200,
+  "losses": 220,
+  "testFile": "src/domain/outcome/all-trade-types-outcome.test.ts",
+  "testsPassed": 7,
+  "checksPerCase": "outcome + digit-contracts + settledResult + DigitRow highlight",
+  "payoutOnWinStake10": 19.52,
+  "payoutRate": 0.9522,
+  "cannotWin": [
+    {
+      "selection": "OVER barrier 9",
+      "winDigits": [],
+      "reason": "no digit > 9"
+    },
+    {
+      "selection": "UNDER barrier 0",
+      "winDigits": [],
+      "reason": "no digit < 0"
+    }
+  ],
+  "sections": [
+    {
+      "kind": "EVEN",
+      "label": "EVEN_ODD · even",
+      "caseCount": 10,
+      "avgWinCount": 5,
+      "winProbabilityPct": 50,
+      "rows": [
+        {
+          "target": null,
+          "winDigits": [
+            0,
+            2,
+            4,
+            6,
+            8
+          ],
+          "winCount": 5,
+          "lossCount": 5,
+          "byExit": {
+            "0": "WIN",
+            "1": "LOSS",
+            "2": "WIN",
+            "3": "LOSS",
+            "4": "WIN",
+            "5": "LOSS",
+            "6": "WIN",
+            "7": "LOSS",
+            "8": "WIN",
+            "9": "LOSS"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "ODD",
+      "label": "EVEN_ODD · odd",
+      "caseCount": 10,
+      "avgWinCount": 5,
+      "winProbabilityPct": 50,
+      "rows": [
+        {
+          "target": null,
+          "winDigits": [
+            1,
+            3,
+            5,
+            7,
+            9
+          ],
+          "winCount": 5,
+          "lossCount": 5,
+          "byExit": {
+            "0": "LOSS",
+            "1": "WIN",
+            "2": "LOSS",
+            "3": "WIN",
+            "4": "LOSS",
+            "5": "WIN",
+            "6": "LOSS",
+            "7": "WIN",
+            "8": "LOSS",
+            "9": "WIN"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "MATCH",
+      "label": "MATCH_DIFFER · match",
+      "caseCount": 100,
+      "avgWinCount": 1,
+      "winProbabilityPct": 10,
+      "rows": [
+        {
+          "target": 0,
+          "winDigits": [
+            0
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "WIN",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 1,
+          "winDigits": [
+            1
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "WIN",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 2,
+          "winDigits": [
+            2
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "WIN",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 3,
+          "winDigits": [
+            3
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "WIN",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 4,
+          "winDigits": [
+            4
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "WIN",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 5,
+          "winDigits": [
+            5
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "WIN",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 6,
+          "winDigits": [
+            6
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "WIN",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 7,
+          "winDigits": [
+            7
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "WIN",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 8,
+          "winDigits": [
+            8
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "WIN",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 9,
+          "winDigits": [
+            9
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "WIN"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "DIFFER",
+      "label": "MATCH_DIFFER · differ",
+      "caseCount": 100,
+      "avgWinCount": 9,
+      "winProbabilityPct": 90,
+      "rows": [
+        {
+          "target": 0,
+          "winDigits": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "LOSS",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 1,
+          "winDigits": [
+            0,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "LOSS",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 2,
+          "winDigits": [
+            0,
+            1,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "LOSS",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 3,
+          "winDigits": [
+            0,
+            1,
+            2,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "LOSS",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 4,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "LOSS",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 5,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "LOSS",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 6,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            7,
+            8,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "LOSS",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 7,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            8,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "LOSS",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 8,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "LOSS",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 9,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "LOSS"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "OVER",
+      "label": "OVER_UNDER · over",
+      "caseCount": 100,
+      "avgWinCount": 4.5,
+      "winProbabilityPct": 45,
+      "rows": [
+        {
+          "target": 0,
+          "winDigits": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "LOSS",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 1,
+          "winDigits": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 8,
+          "lossCount": 2,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 2,
+          "winDigits": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 7,
+          "lossCount": 3,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 3,
+          "winDigits": [
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 6,
+          "lossCount": 4,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 4,
+          "winDigits": [
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 5,
+          "lossCount": 5,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 5,
+          "winDigits": [
+            6,
+            7,
+            8,
+            9
+          ],
+          "winCount": 4,
+          "lossCount": 6,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 6,
+          "winDigits": [
+            7,
+            8,
+            9
+          ],
+          "winCount": 3,
+          "lossCount": 7,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 7,
+          "winDigits": [
+            8,
+            9
+          ],
+          "winCount": 2,
+          "lossCount": 8,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "WIN",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 8,
+          "winDigits": [
+            9
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "WIN"
+          }
+        },
+        {
+          "target": 9,
+          "winDigits": [],
+          "winCount": 0,
+          "lossCount": 10,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "UNDER",
+      "label": "OVER_UNDER · under",
+      "caseCount": 100,
+      "avgWinCount": 4.5,
+      "winProbabilityPct": 45,
+      "rows": [
+        {
+          "target": 0,
+          "winDigits": [],
+          "winCount": 0,
+          "lossCount": 10,
+          "byExit": {
+            "0": "LOSS",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 1,
+          "winDigits": [
+            0
+          ],
+          "winCount": 1,
+          "lossCount": 9,
+          "byExit": {
+            "0": "WIN",
+            "1": "LOSS",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 2,
+          "winDigits": [
+            0,
+            1
+          ],
+          "winCount": 2,
+          "lossCount": 8,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "LOSS",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 3,
+          "winDigits": [
+            0,
+            1,
+            2
+          ],
+          "winCount": 3,
+          "lossCount": 7,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "LOSS",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 4,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "winCount": 4,
+          "lossCount": 6,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "LOSS",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 5,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "winCount": 5,
+          "lossCount": 5,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "LOSS",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 6,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "winCount": 6,
+          "lossCount": 4,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "LOSS",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 7,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "winCount": 7,
+          "lossCount": 3,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "LOSS",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 8,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "winCount": 8,
+          "lossCount": 2,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "LOSS",
+            "9": "LOSS"
+          }
+        },
+        {
+          "target": 9,
+          "winDigits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "winCount": 9,
+          "lossCount": 1,
+          "byExit": {
+            "0": "WIN",
+            "1": "WIN",
+            "2": "WIN",
+            "3": "WIN",
+            "4": "WIN",
+            "5": "WIN",
+            "6": "WIN",
+            "7": "WIN",
+            "8": "WIN",
+            "9": "LOSS"
+          }
+        }
+      ]
+    }
+  ]
+}

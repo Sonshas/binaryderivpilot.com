@@ -1,0 +1,11 @@
+---
+description: Never create .gitignore or extra env template files — only root .env
+alwaysApply: true
+---
+
+# No .gitignore / env templates
+
+- Do **not** create, restore, or generate any `.gitignore` files in this repo.
+- The only app env file is the repo-root `.env`. Do **not** create `.env.example`, `.env.production`, `.env.local`, or any other `.env*` variant.
+- Do not create `deploy.local.env.example` or similar `*.env.example` templates.
+- If docs or error messages mention copying an example env file, point to editing the root `.env` (or `deploy/vultr/deploy.local.env` for deploy SSH/IP only) instead.

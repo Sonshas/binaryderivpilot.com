@@ -1,0 +1,102 @@
+{
+}
+
+:80, http://binaryderivpilot.com, http://www.binaryderivpilot.com {
+	root * /var/www/binaryderivpilot/current
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	@assets path /assets/* /media/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	@webm path *.webm
+	header @webm Content-Type video/webm
+
+	@notAssets not path /assets/* /media/*
+	header @notAssets Cache-Control "no-cache"
+
+	handle /assets/* {
+		file_server
+	}
+	handle /media/* {
+		file_server
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+www.binaryderivpilot.com {
+	redir https://binaryderivpilot.com{uri} permanent
+}
+
+binaryderivpilot.com {
+	root * /var/www/binaryderivpilot/current
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	handle /api/megapay/webhook {
+		rewrite * /functions/v1/megapay-webhook
+		reverse_proxy https://zjxjfqencodctnijvtjz.supabase.co {
+			header_up Host zjxjfqencodctnijvtjz.supabase.co
+		}
+	}
+
+	handle /api/mpesa/callback {
+		rewrite * /functions/v1/mpesa-callback
+		reverse_proxy https://zjxjfqencodctnijvtjz.supabase.co {
+			header_up Host zjxjfqencodctnijvtjz.supabase.co
+		}
+	}
+
+	handle /api/mpesa/b2c/result {
+		rewrite * /functions/v1/mpesa-b2c-result
+		reverse_proxy https://zjxjfqencodctnijvtjz.supabase.co {
+			header_up Host zjxjfqencodctnijvtjz.supabase.co
+		}
+	}
+	handle /api/mpesa/b2c/timeout {
+		rewrite * /functions/v1/mpesa-b2c-result?kind=timeout
+		reverse_proxy https://zjxjfqencodctnijvtjz.supabase.co {
+			header_up Host zjxjfqencodctnijvtjz.supabase.co
+		}
+	}
+
+	@assets path /assets/* /media/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	@webm path *.webm
+	header @webm Content-Type video/webm
+
+	@notAssets not path /assets/* /media/*
+	header @notAssets Cache-Control "no-cache"
+
+	handle /assets/* {
+		file_server
+	}
+	handle /media/* {
+		file_server
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

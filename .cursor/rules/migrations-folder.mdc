@@ -1,0 +1,11 @@
+---
+description: All database SQL migrations live in the repo-root migrations/ folder
+alwaysApply: true
+---
+
+# Database migrations folder
+
+- **Canonical path:** `migrations/` at the repo root (e.g. `migrations/20261008150000_name.sql`).
+- `supabase/migrations` is a Windows junction to that same folder so the Supabase CLI still works — do **not** create a separate copy of SQL files under `supabase/`.
+- Create every new database migration only under `migrations/`. Never put new `.sql` migration files elsewhere.
+- Follow the existing apply → repair → fold into host schema → delete individual file workflow in `auto-deploy-after-changes.mdc`, using paths under `migrations\` (or the junction).

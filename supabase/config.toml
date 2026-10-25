@@ -1,0 +1,60 @@
+project_id = "zjxjfqencodctnijvtjz"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.pooler]
+enabled = false
+default_pool_size = 15
+max_client_conn = 200
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[storage.analytics]
+enabled = true
+max_namespaces = 10
+
+[storage.image_transformation]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "https://binaryderivpilot.com"
+additional_redirect_urls = ["https://*-l.1517dbee-c7a4-47e7-ae0b-e1fdcf23e826.lovableproject.com/**", "https://*-s.1517dbee-c7a4-47e7-ae0b-e1fdcf23e826.lovableproject.com/**", "https://1517dbee-c7a4-47e7-ae0b-e1fdcf23e826-thr_*.lovableproject.com/**", "https://1517dbee-c7a4-47e7-ae0b-e1fdcf23e826.lovableproject.com/**", "https://id-preview*--1517dbee-c7a4-47e7-ae0b-e1fdcf23e826.*.lovable.app/**", "https://id-preview*--1517dbee-c7a4-47e7-ae0b-e1fdcf23e826.lovable.app/**", "https://binaryderivpilot.com/**", "https://www.binaryderivpilot.com/**", "https://7a23e240-59e2-43ac-8eae-6913812ef8d1-00-1onsvvs71aqkk-iqenait9.reed.replit.dev/app/trade", "https://7a23e240-59e2-43ac-8eae-6913812ef8d1-00-1onsvvs71aqkk-iqenait9.reed.replit.dev/app/security", "http://localhost:5173/**", "http://127.0.0.1:5173/**", "https://binaryderivpilot.com/reset-password", "https://binaryderivpilot.com/auth/confirm", "https://binaryderivpilot.com/app/trade", "https://binaryderivpilot.com/app/security"]
+
+[auth.email]
+enable_confirmations = false
+max_frequency = "1m0s"
+otp_length = 8
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.rate_limit]
+email_sent = 30
+
+[edge_runtime]
+enabled = true
+
+[analytics]
+enabled = false

@@ -1,0 +1,30 @@
+---
+description: Owner pre-approves applying migrations, then deleting them, and deploying functions + site after every change
+alwaysApply: true
+---
+
+# Always update live after changes
+
+Standing approval from the owner: once a change is built and tests pass, apply it to Supabase and ship the site via GitHub — do not stop to ask.
+
+1. **New SQL migration** (`migrations/<timestamp>_name.sql` at repo root; `supabase/migrations` is a junction to the same folder). Remote history holds deleted versions, so `db push` fails. Apply directly, record it, fold it in, then delete it:
+
+   ```powershell
+   cmd /c "npx supabase db query --linked -f migrations\<file>.sql"
+   cmd /c "npx supabase migration repair --status applied <timestamp> --linked"
+   ```
+
+   - Append the file to `migrations/20260920111952_smartbasebinary_host_schema.sql` under a `-- from: <file>` marker, add it to that file's header list and to `MIGRATION_MANIFEST.md`.
+   - Tests that inspect migration SQL read it with `hostSchemaSection(hostSchema, '<file>')` (`apps/web/src/domain/host-schema-section.ts`), never the deleted file.
+   - Delete the individual migration file (use the Delete tool, one file at a time).
+   - Bump the "current through" version in `MIGRATION_MANIFEST.md` / `deploy/vultr/README.md` notes as needed.
+
+2. **Edge Functions** (any change under `supabase/functions/`, including `_shared/`): add new names to `deploy/vultr/deploy-supabase-functions.ps1`, then run it (all, or `-Only name1,name2`).
+
+3. **Website** (any change under `apps/web/`): **do not** SCP from the agent to the VPS. Commit (when the user asks, or as part of an explicit ship request) and **`git push origin main`** so `.github/workflows/deploy-web.yml` builds and deploys. Manual/emergency fallback only: `deploy/vultr/deploy.ps1`.
+
+4. **VPS SSH** remains for server ops only (Caddy, `archive-legacy-site.sh`, disk, keys) — not for routine code deploys.
+
+Run Supabase / SSH ops with `required_permissions: ["all", "full_network"]`. Order: migrations → functions → push site. `DbConfigLoginRoleNetworkError` from `db query` is transient — retry.
+
+Never apply or deploy if the build or tests fail — fix first. Report what was applied and verified (including the Actions run URL when the site shipped via GitHub).
