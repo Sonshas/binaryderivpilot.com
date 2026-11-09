@@ -81,10 +81,19 @@ async function errorMessage(error: unknown): Promise<string> {
 async function signedInClient() {
   const client = getSupabase();
   if (!client) return null;
-  const {
-    data: { session },
-  } = await client.auth.getSession();
-  return session?.user ? { client, userId: session.user.id } : null;
+  try {
+    const raced = await Promise.race([
+      client.auth.getSession(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_500)),
+    ]);
+    const session = raced?.data?.session;
+    if (session?.user) return { client, userId: session.user.id };
+  } catch {
+    /* fall through to stored session */
+  }
+  const { peekStoredAuthUser } = await import("@/lib/supabase");
+  const stored = peekStoredAuthUser();
+  return stored ? { client, userId: stored.id } : null;
 }
 
 export const realTradingService = {

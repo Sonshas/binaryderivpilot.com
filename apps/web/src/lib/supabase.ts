@@ -40,9 +40,9 @@ function timeoutMsFor(url: string): number {
   if (url.includes('/rest/v1/')) return 2_500
   if (url.includes('/auth/v1/user')) return 2_500
   if (url.includes('/auth/v1/token?grant_type=refresh_token')) return 3_000
-  // REAL place/settle must reach Deriv + Postgres; 8s aborted valid tickets as "unavailable".
-  if (url.includes('/functions/v1/real-trade')) return 25_000
-  if (url.includes('/functions/v1/')) return 8_000
+  // REAL place/settle must reach Deriv + Postgres; under 30s aborted valid tickets.
+  if (url.includes('/functions/v1/real-trade')) return 35_000
+  if (url.includes('/functions/v1/')) return 12_000
   if (url.includes('/auth/v1/')) return 8_000
   return 10_000
 }
@@ -133,8 +133,16 @@ export function getSupabase(): SupabaseClient<Database> | null {
   return client
 }
 
-/** Sync peek of the persisted Auth session so RequireAuth can render without waiting on Auth API. */
-export function peekStoredAuthUser(): { id: string; email: string; created_at?: string; user_metadata?: Record<string, unknown> } | null {
+function readStoredAuthPayload(): {
+  access_token?: string
+  expires_at?: number
+  user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
+  currentSession?: {
+    access_token?: string
+    expires_at?: number
+    user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
+  }
+} | null {
   if (!supabaseUrl) return null
   try {
     const host = new URL(supabaseUrl).hostname
@@ -142,25 +150,49 @@ export function peekStoredAuthUser(): { id: string; email: string; created_at?: 
     if (!ref) return null
     const raw = localStorage.getItem(`sb-${ref}-auth-token`)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as {
-      user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
-      currentSession?: { user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> } }
+    return JSON.parse(raw) as {
+      access_token?: string
       expires_at?: number
-    }
-    const user = parsed.user ?? parsed.currentSession?.user
-    if (!user?.id) return null
-    if (typeof parsed.expires_at === 'number' && parsed.expires_at * 1000 < Date.now() - 60_000) {
-      return null
-    }
-    return {
-      id: user.id,
-      email: user.email ?? '',
-      created_at: user.created_at,
-      user_metadata: user.user_metadata,
+      user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
+      currentSession?: {
+        access_token?: string
+        expires_at?: number
+        user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
+      }
     }
   } catch {
     return null
   }
+}
+
+/** Sync peek of the persisted Auth session so RequireAuth can render without waiting on Auth API. */
+export function peekStoredAuthUser(): { id: string; email: string; created_at?: string; user_metadata?: Record<string, unknown> } | null {
+  const parsed = readStoredAuthPayload()
+  if (!parsed) return null
+  const user = parsed.user ?? parsed.currentSession?.user
+  if (!user?.id) return null
+  const expiresAt = parsed.expires_at ?? parsed.currentSession?.expires_at
+  if (typeof expiresAt === 'number' && expiresAt * 1000 < Date.now() - 60_000) {
+    return null
+  }
+  return {
+    id: user.id,
+    email: user.email ?? '',
+    created_at: user.created_at,
+    user_metadata: user.user_metadata,
+  }
+}
+
+/** Access token from local storage when Auth getSession hangs. */
+export function peekStoredAccessToken(): string | null {
+  const parsed = readStoredAuthPayload()
+  if (!parsed) return null
+  const expiresAt = parsed.expires_at ?? parsed.currentSession?.expires_at
+  if (typeof expiresAt === 'number' && expiresAt * 1000 < Date.now() - 60_000) {
+    return null
+  }
+  const token = parsed.access_token ?? parsed.currentSession?.access_token
+  return token && token.length > 20 ? token : null
 }
 
 export const supabase: SupabaseClient<Database> = new Proxy({} as SupabaseClient<Database>, {

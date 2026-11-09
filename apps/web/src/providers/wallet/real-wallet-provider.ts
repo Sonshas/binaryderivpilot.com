@@ -313,10 +313,21 @@ export const realWalletProvider: WalletProvider = {
     }
 
     const client = getSupabase()!;
-    const {
-      data: { session },
-    } = await client.auth.getSession();
-    if (!session?.user) {
+    let userId: string | null = null;
+    try {
+      const raced = await Promise.race([
+        client.auth.getSession(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_500)),
+      ]);
+      userId = raced?.data?.session?.user?.id ?? null;
+    } catch {
+      userId = null;
+    }
+    if (!userId) {
+      const { peekStoredAuthUser } = await import("@/lib/supabase");
+      userId = peekStoredAuthUser()?.id ?? null;
+    }
+    if (!userId) {
       const email = localRealEmail();
       if (email)
         return okReal(
@@ -330,7 +341,7 @@ export const realWalletProvider: WalletProvider = {
       );
     }
 
-    const { data, error } = await readRealWalletRow(client, session.user.id);
+    const { data, error } = await readRealWalletRow(client, userId);
 
     if (error) {
       reportBackendIssue("wallet", "wallets.read", error);

@@ -6,8 +6,8 @@ import { safeUserMessage } from '@/lib/safe-user-message'
 import { realTradingService, type RealTradingConfig } from '@/services/real-trading'
 import type { AccountMode } from '@/types'
 
-/** Paint "checking" briefly; apply late successes when Auth/edge lag past a few seconds. */
-const CONFIG_PAINT_MS = 3_500
+/** Keep "checking" until edge responds; only show unavailable after a long stall. */
+const CONFIG_PAINT_MS = 20_000
 
 export function useRealTradingConfig(kind: AccountMode) {
   const { isSignedIn, user } = useAuthSession()
