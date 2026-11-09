@@ -336,43 +336,20 @@ export async function loadAdminUserListRows(): Promise<AdminUserListSqlRow[]> {
   })).filter((row) => row.id);
 }
 
-/** Completed real deposits for /admin/deposits. */
+/** Completed real deposits for /admin/deposits — reuse the proven dashboard queries. */
 export async function loadAdminDepositsList(
   limit = 300,
 ): Promise<Array<DepositSource & { user_email: string | null }>> {
   const cap = Math.max(1, Math.min(1000, Math.trunc(limit) || 300));
-  const rows = await withFreshDb(async (sql) => {
-    return await sql<SqlRow[]>`
-      select d.id::text as id,
-             d.user_id::text as user_id,
-             d.amount,
-             d.currency,
-             d.status,
-             d.provider,
-             d.method,
-             d.mpesa_receipt,
-             d.callback_amount_kes,
-             d.details,
-             d.created_at,
-             d.updated_at,
-             d.is_simulated,
-             d.account_mode,
-             u.email as user_email
-        from public.deposits d
-        left join public.users u on u.id = d.user_id
-       where d.account_mode = 'real'
-         and d.is_simulated = false
-         and d.status = 'COMPLETED'
-       order by d.created_at desc
-       limit ${cap}
-    `;
-  }, 12_000);
-  return rows
+  const { authUsers, deposits } = await loadAdminDashboardSources();
+  const emails = new Map(authUsers.map((row) => [row.id, row.email]));
+  return deposits
+    .filter((row) => row.status === "COMPLETED")
+    .slice(0, cap)
     .map((row) => ({
-      ...mapDeposit(row),
-      user_email: textOrNull(row.user_email),
-    }))
-    .filter((row) => row.id && row.user_id);
+      ...row,
+      user_email: emails.get(row.user_id) ?? null,
+    }));
 }
 
 export async function loadMemberGateState(userId: string): Promise<{
