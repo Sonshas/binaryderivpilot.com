@@ -41,7 +41,7 @@ describe('shared module', () => {
   it('uses the same staff roles as admin-withdrawals', () => {
     const match = withdrawServer.match(/WITHDRAWAL_ADMIN_ROLES = new Set\(\[([^\]]+)\]\)/)
     expect(match).toBeTruthy()
-    const roles = [...match![1].matchAll(/'([^']+)'/g)].map((part) => part[1])
+    const roles = [...match![1].matchAll(/['"]([^'"]+)['"]/g)].map((part) => part[1])
     expect([...DASHBOARD_STAFF_ROLES]).toEqual(roles)
   })
 })

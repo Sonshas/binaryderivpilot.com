@@ -199,6 +199,19 @@ export function peekStoredAccessToken(): string | null {
   return token && token.length > 20 ? token : null
 }
 
+/** Drop the persisted Auth session so a hung GoTrue signOut cannot trap the UI. */
+export function clearStoredAuthSession(): void {
+  if (!supabaseUrl) return
+  try {
+    const host = new URL(supabaseUrl).hostname
+    const ref = host.split('.')[0]
+    if (!ref) return
+    localStorage.removeItem(`sb-${ref}-auth-token`)
+  } catch {
+    /* private mode / storage blocked */
+  }
+}
+
 export const supabase: SupabaseClient<Database> = new Proxy({} as SupabaseClient<Database>, {
   get(_target, prop, receiver) {
     const live = getSupabase()

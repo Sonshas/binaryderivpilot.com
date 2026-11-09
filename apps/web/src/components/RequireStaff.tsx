@@ -18,11 +18,15 @@ export function RequireStaff({ children }: { children: ReactNode }) {
     if (loading || !isSignedIn || allowed) return
     let cancelled = false
     setKicking(true)
-    void authService.signOut().then(() => {
+    const ceiling = globalThis.setTimeout(() => {
+      if (!cancelled) navigate('/login', { replace: true })
+    }, 3_500)
+    void authService.signOut().finally(() => {
       if (!cancelled) navigate('/login', { replace: true })
     })
     return () => {
       cancelled = true
+      globalThis.clearTimeout(ceiling)
     }
   }, [loading, isSignedIn, allowed, authService, navigate])
 

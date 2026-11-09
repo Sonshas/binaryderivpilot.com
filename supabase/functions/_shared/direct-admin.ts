@@ -135,7 +135,7 @@ export async function loadAdminDashboardSources(): Promise<{
       profiles,
       deposits: depositRows.map(mapDeposit).filter((row) => row.id && row.user_id),
     };
-  }, 6_000);
+  }, 4_500);
 }
 
 export type AdminUserListSqlRow = {

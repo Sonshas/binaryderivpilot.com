@@ -90,18 +90,9 @@ Deno.serve(async (req) => {
   if (body.action !== 'overview') return json({ error: 'Unknown action.' }, 400)
 
   try {
-    let sources: Awaited<ReturnType<typeof loadAdminDashboardSources>>
-    try {
-      sources = await loadAdminDashboardSources()
-    } catch (directErr) {
-      const message = directErr instanceof Error ? directErr.message : 'error'
-      console.error(
-        'admin-dashboard.direct',
-        message.replace(/postgres(?:ql)?:\/\/\S+/gi, '[db]').slice(0, 180),
-      )
-      // Pooler ENOTFOUND / timeout: same PostgREST fallback admin-users uses.
-      sources = await loadDashboardViaRest(admin)
-    }
+    // Race direct pooler vs PostgREST — pooler ENOTFOUND and REST freezes
+    // both happen on this project; whichever answers first wins.
+    const sources = await raceDashboardSources(admin)
     const { authUsers, profiles, deposits } = sources
     const users = mergeJoinedUsers(authUsers, profiles)
     const emails = new Map(users.map((row) => [row.id, row.email]))
@@ -131,6 +122,90 @@ Deno.serve(async (req) => {
   }
 })
 
+async function raceDashboardSources(admin: ReturnType<typeof adminClient>) {
+  type Sources = Awaited<ReturnType<typeof loadAdminDashboardSources>>
+  const errors: string[] = []
+  return await new Promise<Sources>((resolve, reject) => {
+    let pending = 3
+    let settled = false
+    const fail = (label: string, err: unknown) => {
+      const message = err instanceof Error ? err.message : 'error'
+      errors.push(
+        `${label}:${message.replace(/postgres(?:ql)?:\/\/\S+/gi, '[db]').slice(0, 120)}`,
+      )
+      pending -= 1
+      if (!settled && pending <= 0) {
+        settled = true
+        reject(new Error(errors.join(' | ') || 'dashboard sources failed'))
+      }
+    }
+    const win = (value: Sources) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    void loadAdminDashboardSources().then(win, (err) => {
+      console.error(
+        'admin-dashboard.direct',
+        err instanceof Error ? err.message.replace(/postgres(?:ql)?:\/\/\S+/gi, '[db]').slice(0, 180) : 'error',
+      )
+      fail('direct', err)
+    })
+    void loadDashboardViaRest(admin).then(win, (err) => {
+      console.error(
+        'admin-dashboard.rest',
+        err instanceof Error ? err.message.slice(0, 180) : 'error',
+      )
+      fail('rest', err)
+    })
+    // Auth Admin still answers when PostgREST/pooler are restarting — users only.
+    void loadDashboardViaAuthAdmin(admin).then(win, (err) => {
+      console.error(
+        'admin-dashboard.auth',
+        err instanceof Error ? err.message.slice(0, 180) : 'error',
+      )
+      fail('auth', err)
+    })
+  })
+}
+
+/** Last resort while DB/API recover: Auth user directory, empty deposits. */
+async function loadDashboardViaAuthAdmin(admin: ReturnType<typeof adminClient>) {
+  const authUsers: Array<{
+    id: string
+    email: string | null
+    created_at: string
+    app_role: string | null
+  }> = []
+  let page = 1
+  while (page <= 10) {
+    const result = await Promise.race([
+      admin.auth.admin.listUsers({ page, perPage: 200 }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
+    ])
+    if (result.error) throw result.error
+    const batch = result.data?.users ?? []
+    for (const row of batch) {
+      const meta = (row.app_metadata ?? {}) as Record<string, unknown>
+      authUsers.push({
+        id: row.id,
+        email: typeof row.email === 'string' ? row.email : null,
+        created_at: row.created_at ?? '',
+        app_role: typeof meta.role === 'string' ? meta.role : null,
+      })
+    }
+    if (batch.length < 200) break
+    page += 1
+  }
+  if (!authUsers.length) throw new Error('no auth users')
+  const profiles = authUsers.map((row) => ({
+    id: row.id,
+    email: row.email,
+    role: row.app_role,
+  }))
+  return { authUsers, profiles, deposits: [] }
+}
+
 async function loadDashboardViaRest(admin: ReturnType<typeof adminClient>) {
   const [usersRes, depositsRes] = await Promise.all([
     Promise.race([
@@ -139,7 +214,7 @@ async function loadDashboardViaRest(admin: ReturnType<typeof adminClient>) {
         .select('id, email, role, created_at')
         .order('created_at', { ascending: false })
         .limit(5000),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10_000)),
     ]),
     Promise.race([
       admin
@@ -152,7 +227,7 @@ async function loadDashboardViaRest(admin: ReturnType<typeof adminClient>) {
         .eq('method', 'mpesa')
         .order('created_at', { ascending: false })
         .limit(3000),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10_000)),
     ]),
   ])
   if (usersRes.error) throw usersRes.error

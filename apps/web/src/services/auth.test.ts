@@ -20,6 +20,9 @@ const redirects = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase', () => ({
   isSupabaseConfigured: true,
+  clearStoredAuthSession: () => {
+    memory.session = null
+  },
   peekStoredAuthUser: () =>
     memory.session?.user
       ? {

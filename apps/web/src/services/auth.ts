@@ -42,6 +42,7 @@ import { reportBackendIssue } from "@/services/system-issues";
 import { accountEnabled } from "@/lib/account-access";
 import { roleWithAdminList } from "@/lib/admin-emails";
 import {
+  clearStoredAuthSession,
   dataApiFetch,
   getSupabase,
   isSupabaseConfigured,
@@ -1043,14 +1044,18 @@ export const authService = {
     }
     if (!isSupabaseConfigured) return authNotConfigured(null);
     const client = getSupabase()!;
-    const { error } = await client.auth.signOut();
-    if (error) {
-      return notConnected(
-        null,
-        plainAuthMessage(error.message),
-        "NOT_CONNECTED",
-        "real",
+    // Always clear local session first so RequireStaff / logout never stick
+    // on "Signing out" when GoTrue is frozen.
+    clearStoredAuthSession();
+    clearDemoSession();
+    try {
+      await raceWithTimeout(
+        client.auth.signOut({ scope: "local" }),
+        2_500,
+        "Sign-out timed out",
       );
+    } catch {
+      /* local storage already cleared */
     }
     return okReal(
       null,
