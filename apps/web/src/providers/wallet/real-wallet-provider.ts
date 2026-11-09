@@ -353,14 +353,14 @@ export const realWalletProvider: WalletProvider = {
     }
     if (!data) {
       return notConnected(
-        emptyRealWallet({ userId: session.user.id, status: "empty" }),
+        emptyRealWallet({ userId, status: "empty" }),
         `${realAccountShort()} wallet is still being prepared. Please try again in a moment.`,
         "NOT_CONNECTED",
       );
     }
     if (data.is_simulated) {
       return notConnected(
-        emptyRealWallet({ userId: session.user.id }),
+        emptyRealWallet({ userId }),
         `${realAccountShort()} wallet is temporarily unavailable.`,
         "NOT_CONNECTED",
       );
