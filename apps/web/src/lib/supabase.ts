@@ -44,6 +44,8 @@ function timeoutMsFor(url: string): number {
   if (url.includes('/auth/v1/token?grant_type=password')) return 8_000
   // REAL place/settle must reach Deriv + Postgres; under 30s aborted valid tickets.
   if (url.includes('/functions/v1/real-trade')) return 35_000
+  if (url.includes('/functions/v1/admin-dashboard')) return 22_000
+  if (url.includes('/functions/v1/admin-users')) return 22_000
   if (url.includes('/functions/v1/')) return 12_000
   if (url.includes('/auth/v1/')) return 8_000
   return 10_000

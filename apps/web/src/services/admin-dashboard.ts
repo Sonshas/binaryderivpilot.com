@@ -4,8 +4,8 @@ import type { Result } from '@/services/megapay'
 import { reportBackendIssue } from '@/services/system-issues'
 
 const FUNCTION = 'admin-dashboard'
-/** Direct SQL + pooler retry can take a few seconds; keep under the Edge wall clock. */
-const LOAD_MS = 16_000
+/** Direct SQL may fail over to PostgREST; keep under the Edge wall clock. */
+const LOAD_MS = 22_000
 
 export interface DashboardUserRow {
   id: string

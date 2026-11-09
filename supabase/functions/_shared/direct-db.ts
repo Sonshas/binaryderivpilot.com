@@ -38,7 +38,7 @@ function swapPoolerHost(raw: string, host: string): string {
   return raw.replace(/@[^/@?]+\.pooler\.supabase\.com/i, `@${host}`);
 }
 
-function databaseUrlCandidates(): string[] {
+export function databaseUrlCandidates(): string[] {
   const raw = Deno.env.get("SUPABASE_DB_URL") ?? "";
   if (!raw) throw new Error("timeout");
   const out: string[] = [];
@@ -48,23 +48,33 @@ function databaseUrlCandidates(): string[] {
   // Transaction pooler (6543) first — session mode (5432) often drops Edge sockets.
   // Also rotate aws-0 / aws-1: one region pooler host often times out from Edge.
   if (/pooler\.supabase\.com/i.test(raw)) {
+    const configuredHost = (raw.match(/@([^/@?]+\.pooler\.supabase\.com)/i) ?? [])[1] ?? "";
     const hosts = [
+      configuredHost,
       ...POOLER_HOSTS,
       "aws-0-eu-west-1.pooler.supabase.com",
       "aws-1-eu-west-1.pooler.supabase.com",
     ].filter(Boolean);
+    // Exact env URL first (whatever port/host Supabase issued).
+    push(raw);
+    push(withPoolerPort(raw, 6543));
+    // Transaction pooler (6543) across hosts next — never burn a retry slot on
+    // session-mode 5432 before the alternate region host has been tried.
     for (const host of hosts) {
-      const onHost = swapPoolerHost(raw, host);
-      push(withPoolerPort(onHost, 6543));
-      push(withPoolerPort(onHost, 5432));
+      push(withPoolerPort(swapPoolerHost(raw, host), 6543));
+    }
+    for (const host of hosts) {
+      push(withPoolerPort(swapPoolerHost(raw, host), 5432));
     }
     return out.length ? out : [raw];
   }
   for (const host of POOLER_HOSTS) {
-    for (const port of [6543, 5432]) {
-      const rewritten = rewriteToPooler(raw, host, port);
-      if (rewritten) push(rewritten);
-    }
+    const rewritten = rewriteToPooler(raw, host, 6543);
+    if (rewritten) push(rewritten);
+  }
+  for (const host of POOLER_HOSTS) {
+    const rewritten = rewriteToPooler(raw, host, 5432);
+    if (rewritten) push(rewritten);
   }
   return out.length ? out : [raw];
 }
@@ -127,7 +137,7 @@ export async function withDirectRead<T>(
 
 function isClosedConnection(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
-  return /connection_closed|connection closed|connection reset|econnreset|terminated unexpectedly|broken pipe|socket hang up|fetch failed|connect timeout|EAI_|Client has encountered/i
+  return /connection_closed|connection closed|connection reset|econnreset|terminated unexpectedly|broken pipe|socket hang up|fetch failed|connect timeout|EAI_|ENOTFOUND|tenant\/user|Client has encountered/i
     .test(message);
 }
 
@@ -142,8 +152,9 @@ export async function withFreshDb<T>(
   const urls = databaseUrlCandidates();
   // Try the preferred pooler host, then one fallback — enough to survive
   // aws-0/aws-1 tenant routing without burning the whole request budget.
-  const maxAttempts = Math.min(urls.length, 2);
-  const perAttempt = Math.max(500, Math.min(timeoutMs, 3_000));
+  const maxAttempts = Math.min(urls.length, 3);
+  // Admin overview runs multiple selects; keep most of the caller budget per try.
+  const perAttempt = Math.max(500, Math.floor(timeoutMs / maxAttempts));
   let last: unknown = null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const sql = openDirectSql(urls[attempt]);

@@ -4,7 +4,7 @@ import { withFreshDb } from "./direct-db.ts";
 type SqlRow = Record<string, unknown>;
 
 const USER_CAP = 5000;
-const DEPOSIT_CAP = 10000;
+const DEPOSIT_CAP = 3000;
 
 function iso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -76,7 +76,7 @@ function mapDeposit(row: SqlRow): DepositSource {
 
 /**
  * Dashboard reads for /admin and /admin/earnings.
- * Uses withFreshDb so aws-0 / aws-1 pooler hosts rotate when one times out.
+ * Same withFreshDb path as /admin/users (proven on this project’s pooler).
  */
 export async function loadAdminDashboardSources(): Promise<{
   authUsers: AuthUserSource[];
@@ -90,28 +90,37 @@ export async function loadAdminDashboardSources(): Promise<{
        order by created_at desc nulls last
        limit ${USER_CAP}
     `;
-    const depositRows = await sql<SqlRow[]>`
-      select id::text as id,
-             user_id::text as user_id,
-             amount,
-             currency,
-             status,
-             provider,
-             method,
-             mpesa_receipt,
-             callback_amount_kes,
-             details,
-             created_at,
-             updated_at,
-             is_simulated,
-             account_mode
-        from public.deposits
-       where account_mode = 'real'
-         and is_simulated = false
-         and method = 'mpesa'
-       order by created_at desc
-       limit ${DEPOSIT_CAP}
-    `;
+    let depositRows: SqlRow[] = [];
+    try {
+      depositRows = await sql<SqlRow[]>`
+        select id::text as id,
+               user_id::text as user_id,
+               amount,
+               currency,
+               status,
+               provider,
+               method,
+               mpesa_receipt,
+               callback_amount_kes,
+               details,
+               created_at,
+               updated_at,
+               is_simulated,
+               account_mode
+          from public.deposits
+         where account_mode = 'real'
+           and is_simulated = false
+           and method = 'mpesa'
+         order by created_at desc
+         limit ${DEPOSIT_CAP}
+      `;
+    } catch (depErr) {
+      console.error(
+        "admin-dashboard.deposits",
+        depErr instanceof Error ? depErr.message.replace(/postgres(?:ql)?:\/\/\S+/gi, "[db]").slice(0, 160) : "error",
+      );
+      depositRows = [];
+    }
     const profiles = profileRows.map(mapProfile).filter((row) => row.id);
     const authUsers = profileRows.map((row) =>
       mapAuth({
@@ -126,7 +135,7 @@ export async function loadAdminDashboardSources(): Promise<{
       profiles,
       deposits: depositRows.map(mapDeposit).filter((row) => row.id && row.user_id),
     };
-  }, 12_000);
+  }, 6_000);
 }
 
 export type AdminUserListSqlRow = {
