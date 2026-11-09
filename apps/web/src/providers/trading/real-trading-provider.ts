@@ -8,6 +8,7 @@ import { quotedPayout, quotedProfitRate } from "@/lib/trade-settings";
 import { REAL_INTEGRATION } from "@/providers/config";
 import { notConnected, okReal } from "@/providers/results";
 import { reportBackendIssue } from "@/services/system-issues";
+import { abortSignalAfter } from "@/lib/abort-timeout";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { notifyRealWalletChanged } from "@/lib/real-wallet-events";
 import { openLocalRealTrade } from "@/lib/admin-user-trades";
@@ -185,7 +186,7 @@ async function fetchRealTrades(
   else if (filter === "history") query = query.neq("status", "open").limit(500);
   else if (filter === "one" && tradeId) query = query.eq("id", tradeId);
 
-  const { data, error } = await query;
+  const { data, error } = await query.abortSignal(abortSignalAfter(3_000));
   if (error) {
     reportBackendIssue("trading", "trades.read", error);
     return {

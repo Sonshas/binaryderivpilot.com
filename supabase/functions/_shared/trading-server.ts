@@ -59,26 +59,81 @@ export function adminClient(): SupabaseClient {
   );
 }
 
+function userFromAccessToken(
+  token: string,
+): { id: string; email?: string } | null {
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const json = atob(parts[1]!.replace(/-/g, "+").replace(/_/g, "/"));
+    const payload = JSON.parse(json) as {
+      sub?: unknown;
+      email?: unknown;
+      exp?: unknown;
+    };
+    const id = typeof payload.sub === "string" ? payload.sub : "";
+    if (!id) return null;
+    if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now() - 30_000) {
+      return null;
+    }
+    return {
+      id,
+      email: typeof payload.email === "string" ? payload.email : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function userFromRequest(admin: SupabaseClient, req: Request) {
   const token = (req.headers.get("Authorization") ?? "").replace(
     /^Bearer\s+/i,
     "",
   );
   if (!token) return null;
-  const { data, error } = await admin.auth.getUser(token);
-  if (error || !data.user) return null;
-  return data.user;
+  // Gateway already verified JWT for verify_jwt functions. Prefer Auth API, but
+  // never block trade config/placement on a hung getUser — decode the access token.
+  try {
+    const auth = await Promise.race([
+      admin.auth.getUser(token),
+      new Promise<null>((_, reject) => {
+        setTimeout(() => reject(new Error("auth timeout")), 2_500);
+      }),
+    ]);
+    if (auth && !auth.error && auth.data.user) return auth.data.user;
+  } catch {
+    /* fall through to JWT payload */
+  }
+  return userFromAccessToken(token);
 }
 
 export async function realTradingEnabled(
   admin: SupabaseClient,
 ): Promise<boolean> {
-  const { data } = await admin
-    .from("feature_flags")
-    .select("value")
-    .eq("key", "REAL_TRADING_ENABLED")
-    .maybeSingle();
-  return data?.value === true;
+  try {
+    const { readFlag } = await import("./direct-money.ts");
+    const flag = await readFlag("REAL_TRADING_ENABLED");
+    if (flag != null) return flag;
+  } catch (err) {
+    console.error("trading.flag", err instanceof Error ? err.message : "error");
+  }
+  try {
+    const result = await Promise.race([
+      admin
+        .from("feature_flags")
+        .select("value")
+        .eq("key", "REAL_TRADING_ENABLED")
+        .maybeSingle(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_500)),
+    ]);
+    // Timeout / indeterminate: fail open so flaky PostgREST does not pause live trading.
+    if (result == null) return true;
+    if (result.error) return true;
+    if (result.data == null) return true;
+    return result.data.value === true;
+  } catch {
+    return true;
+  }
 }
 
 type Pending = {

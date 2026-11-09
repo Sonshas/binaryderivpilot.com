@@ -1,4 +1,5 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
+import { readUserAccess } from './direct-money.ts'
 
 export interface UserAccessFlags {
   accountStatus: string
@@ -10,6 +11,12 @@ export interface UserAccessFlags {
 }
 
 export async function loadUserAccess(admin: SupabaseClient, userId: string): Promise<UserAccessFlags | null> {
+  try {
+    const direct = await readUserAccess(userId)
+    if (direct) return direct
+  } catch (err) {
+    console.error('user-access.direct', err instanceof Error ? err.message : 'error')
+  }
   const { data, error } = await admin
     .from('users')
     .select(

@@ -28,6 +28,7 @@ import {
   realTradingEnabled,
   userFromRequest,
 } from "../_shared/trading-server.ts";
+import { runDirect } from "../_shared/direct-db.ts";
 import { logEdgeError } from "../_shared/server.ts";
 import { loadUserAccess } from "../_shared/user-access.ts";
 
@@ -96,6 +97,32 @@ function payoutRateForRpc(payoutPercent: number, canWin: boolean): number {
 }
 
 async function loadTradingFees(admin: ReturnType<typeof adminClient>) {
+  try {
+    const rows = await runDirect(
+      (sql) => sql<{ key: string; value: string }[]>`select key, value from public.trading_settings`,
+      3_000,
+    );
+    const map: SettingsMap = {};
+    for (const row of rows) {
+      const key = String(row.key ?? "");
+      if (key) map[key] = String(row.value ?? "");
+    }
+    const fees = tradingFeesFromMap(map);
+    const payoutRaw = Number(map.TRADE_PAYOUT_PERCENT);
+    const payoutPercent =
+      Number.isFinite(payoutRaw) && payoutRaw >= 0 && payoutRaw <= 500
+        ? payoutRaw
+        : 95.22;
+    return {
+      stakeMin: fees.stakeMinUsd || REAL_STAKE_MIN,
+      stakeMax: fees.stakeMaxUsd || REAL_STAKE_MAX,
+      maxOpen: fees.maxOpenTrades || REAL_MAX_OPEN_TRADES,
+      dailyLimit: fees.dailyProfitLimitUsd,
+      payoutPercent,
+    };
+  } catch (err) {
+    console.error("trading.settings", err instanceof Error ? err.message : "error");
+  }
   const { data, error } = await admin
     .from("trading_settings")
     .select("key, value");
@@ -141,10 +168,31 @@ Deno.serve(async (req) => {
   );
 
   if (req.method === "GET") {
-    const { data: daily, error: dailyError } = await admin.rpc(
-      "real_trade_daily_status",
-      { p_user_id: user.id },
-    );
+    let daily: { reached?: boolean; limit?: number | null } | null = null;
+    try {
+      const rows = await runDirect(
+        (sql) =>
+          sql<{ result: { reached?: boolean; limit?: number | null } }[]>`
+            select public.real_trade_daily_status(${user.id}::uuid) as result
+          `,
+        4_000,
+      );
+      daily = rows[0]?.result ?? null;
+    } catch (err) {
+      console.error("trading.daily", err instanceof Error ? err.message : "error");
+    }
+    const { data: dailyRest, error: dailyError } = daily
+      ? { data: daily, error: null }
+      : await Promise.race([
+          admin.rpc("real_trade_daily_status", { p_user_id: user.id }),
+          new Promise<{ data: null; error: { message: string; code: string } }>((resolve) =>
+            setTimeout(
+              () => resolve({ data: null, error: { message: "timeout", code: "57014" } }),
+              3_000,
+            ),
+          ),
+        ]);
+    if (!daily && dailyRest) daily = dailyRest as { reached?: boolean; limit?: number | null };
     if (dailyError) {
       await logEdgeError(
         admin,

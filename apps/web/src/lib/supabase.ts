@@ -19,7 +19,8 @@ let client: SupabaseClient<Database> | null = null
  * Auth `/user` and hung Edge Function calls also need hard ceilings so the
  * trade shell does not sit on "Loading…" / "Checking your session".
  */
-let restPausedUntil = Date.now() + 60_000
+/** Pause only after a slow/failed REST call — do not block the first minute of wallet fallback. */
+let restPausedUntil = 0
 let restProbeTimer: ReturnType<typeof setTimeout> | undefined
 
 function requestUrl(input: RequestInfo | URL): string {
