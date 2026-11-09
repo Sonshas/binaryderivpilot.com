@@ -3,7 +3,6 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { REAL_TRADE_SYMBOLS } from '../_shared/digit-contracts.ts'
 import {
   DerivSession,
-  OPEN_TRADE_COLUMNS,
   TRADE_COLUMNS,
   adminClient,
   corsHeaders,
@@ -13,22 +12,76 @@ import {
   userFromRequest,
   type OpenTradeRow,
 } from '../_shared/trading-server.ts'
+import { runDirect } from '../_shared/direct-db.ts'
 import { logEdgeError } from '../_shared/server.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SWEEP_BATCH = 100
 const USER_BATCH = 10
 
-function dueTrades(admin: SupabaseClient, limit: number) {
-  return admin
+async function loadDueTrades(input: {
+  limit: number
+  userId?: string
+  tradeId?: string | null
+}): Promise<OpenTradeRow[]> {
+  const limit = input.limit
+  const userId = input.userId ?? null
+  const tradeId = input.tradeId ?? null
+  try {
+    const rows = await runDirect(
+      (sql) => sql<OpenTradeRow[]>`
+        select id, user_id, symbol, contract_type, contract_option, selected_digit,
+               barrier, stake, expires_at, duration_ticks, tick_anchor_epoch
+          from public.trades
+         where account_mode = 'real'
+           and is_simulated = false
+           and status = 'open'
+           and expires_at <= now()
+           and (${userId}::uuid is null or user_id = ${userId}::uuid)
+           and (${tradeId}::uuid is null or id = ${tradeId}::uuid)
+         order by expires_at asc
+         limit ${limit}
+      `,
+      4_000,
+    )
+    return rows
+  } catch (err) {
+    console.error(
+      'settle.load.direct',
+      err instanceof Error ? err.message : 'error',
+    )
+  }
+
+  let query = adminClient()
     .from('trades')
-    .select(OPEN_TRADE_COLUMNS)
+    .select(
+      'id, user_id, symbol, contract_type, contract_option, selected_digit, barrier, stake, expires_at, duration_ticks, tick_anchor_epoch',
+    )
     .eq('account_mode', 'real')
     .eq('is_simulated', false)
     .eq('status', 'open')
     .lte('expires_at', new Date().toISOString())
     .order('expires_at', { ascending: true })
     .limit(limit)
+  if (userId) query = query.eq('user_id', userId)
+  if (tradeId) query = query.eq('id', tradeId)
+
+  const raced = await Promise.race([
+    query,
+    new Promise<{ data: null; error: { message: string; code: string } }>(
+      (resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              data: null,
+              error: { message: 'timeout', code: '57014' },
+            }),
+          4_000,
+        ),
+    ),
+  ])
+  if (raced.error) throw raced.error
+  return (raced.data ?? []) as OpenTradeRow[]
 }
 
 async function readBody(req: Request): Promise<Record<string, unknown>> {
@@ -49,32 +102,54 @@ Deno.serve(async (req) => {
   const sweepSecret = req.headers.get('x-sweep-secret')
 
   if (sweepSecret) {
-    const { data: valid } = await admin.rpc('verify_real_trade_sweep_secret', { p_secret: sweepSecret })
+    const { data: valid } = await Promise.race([
+      admin.rpc('verify_real_trade_sweep_secret', { p_secret: sweepSecret }),
+      new Promise<{ data: null }>((resolve) =>
+        setTimeout(() => resolve({ data: null }), 3_000),
+      ),
+    ])
     if (valid !== true) return json({ error: 'Unauthorized' }, 401)
 
     if (body.mode === 'diagnose') {
-      const symbol = (REAL_TRADE_SYMBOLS as readonly string[]).includes(String(body.symbol)) ? String(body.symbol) : 'R_100'
+      const symbol = (REAL_TRADE_SYMBOLS as readonly string[]).includes(String(body.symbol))
+        ? String(body.symbol)
+        : 'R_100'
       const started = Date.now()
       let session: DerivSession | null = null
       try {
-        session = await DerivSession.open()
-        const tick = await fetchFreshTick(session, symbol)
+        session = await Promise.race([
+          DerivSession.open(),
+          new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error('Deriv connect timeout')), 8_000),
+          ),
+        ])
+        const tick = session ? await fetchFreshTick(session, symbol) : null
         return json({ mode: 'diagnose', symbol, tick, elapsed_ms: Date.now() - started })
       } catch (err) {
-        return json({ mode: 'diagnose', symbol, tick: null, error: String(err), elapsed_ms: Date.now() - started }, 502)
+        return json(
+          {
+            mode: 'diagnose',
+            symbol,
+            tick: null,
+            error: String(err),
+            elapsed_ms: Date.now() - started,
+          },
+          502,
+        )
       } finally {
         session?.close()
       }
     }
 
-    const { data, error } = await dueTrades(admin, SWEEP_BATCH)
-    if (error) {
-      await logEdgeError(admin, 'trading', 'real-trade-settle.sweep_load', error, { code: error.code })
+    try {
+      const data = await loadDueTrades({ limit: SWEEP_BATCH })
+      const results = await settleTrades(admin, data)
+      if (results.length) console.log('sweep', JSON.stringify(results))
+      return json({ mode: 'sweep', processed: results.length, results })
+    } catch (error) {
+      await logEdgeError(admin, 'trading', 'real-trade-settle.sweep_load', error)
       return json({ error: 'load failed' }, 500)
     }
-    const results = await settleTrades(admin, (data ?? []) as OpenTradeRow[])
-    if (results.length) console.log('sweep', JSON.stringify(results))
-    return json({ mode: 'sweep', processed: results.length, results })
   }
 
   const user = await userFromRequest(admin, req)
@@ -83,29 +158,59 @@ Deno.serve(async (req) => {
   const tradeId = body.trade_id == null ? null : String(body.trade_id)
   if (tradeId != null && !UUID_RE.test(tradeId)) return json({ error: 'Invalid trade id.' }, 400)
 
-  let query = dueTrades(admin, USER_BATCH).eq('user_id', user.id)
-  if (tradeId) query = query.eq('id', tradeId)
-  const { data, error } = await query
-  if (error) {
+  let data: OpenTradeRow[] = []
+  try {
+    data = await loadDueTrades({
+      limit: USER_BATCH,
+      userId: user.id,
+      tradeId,
+    })
+  } catch (error) {
     await logEdgeError(admin, 'trading', 'real-trade-settle.user_load', error, {
-      code: error.code,
       userId: user.id,
     })
     return json({ error: 'Could not load trades.' }, 500)
   }
-  const results = await settleTrades(admin, (data ?? []) as OpenTradeRow[])
+
+  const results = await settleTrades(admin, data)
 
   let trades: unknown[] = []
   if (tradeId) {
-    const { data: row } = await admin
-      .from('trades')
-      .select(TRADE_COLUMNS)
-      .eq('id', tradeId)
-      .eq('user_id', user.id)
-      .eq('account_mode', 'real')
-      .maybeSingle()
-    if (!row) return json({ error: 'Trade not found.' }, 404)
-    trades = [row]
+    try {
+      const rows = await runDirect(
+        (sql) =>
+          sql<Record<string, unknown>[]>`
+            select *
+              from public.trades
+             where id = ${tradeId}::uuid
+               and user_id = ${user.id}::uuid
+               and account_mode = 'real'
+             limit 1
+          `,
+        3_000,
+      )
+      if (!rows[0]) return json({ error: 'Trade not found.' }, 404)
+      trades = rows
+    } catch {
+      const { data: row } = await Promise.race([
+        admin
+          .from('trades')
+          .select(TRADE_COLUMNS)
+          .eq('id', tradeId)
+          .eq('user_id', user.id)
+          .eq('account_mode', 'real')
+          .maybeSingle(),
+        new Promise<{ data: null }>((resolve) =>
+          setTimeout(() => resolve({ data: null }), 3_000),
+        ),
+      ])
+      if (!row) return json({ error: 'Trade not found.' }, 404)
+      trades = [row]
+    }
   }
-  return json({ processed: results.length, results: results.map(({ tradeId: id, result }) => ({ trade_id: id, result })), trades })
+  return json({
+    processed: results.length,
+    results: results.map(({ tradeId: id, result }) => ({ trade_id: id, result })),
+    trades,
+  })
 })

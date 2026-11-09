@@ -540,14 +540,34 @@ export async function settleTrades(
   if (trades.length === 0) return [];
   let session: DerivSession | null = null;
   try {
-    session = await DerivSession.open();
+    session = await Promise.race([
+      DerivSession.open(),
+      new Promise<null>((_, reject) => {
+        setTimeout(() => reject(new Error("Deriv connect timeout")), 8_000);
+      }),
+    ]);
   } catch (err) {
     await logEdgeError(admin, "trading", "deriv.connect", err);
   }
   const results: SettleResult[] = [];
   try {
-    for (const trade of trades)
-      results.push(await settleOpenTrade(admin, session, trade));
+    for (const trade of trades) {
+      results.push(
+        await Promise.race([
+          settleOpenTrade(admin, session, trade),
+          new Promise<SettleResult>((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  tradeId: trade.id,
+                  result: "waiting",
+                }),
+              12_000,
+            ),
+          ),
+        ]),
+      );
+    }
   } finally {
     session?.close();
   }
