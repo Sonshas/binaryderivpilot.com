@@ -29,6 +29,7 @@ import {
   userFromRequest,
 } from "../_shared/trading-server.ts";
 import { runDirect } from "../_shared/direct-db.ts";
+import { callPlaceRealTrade } from "../_shared/direct-money.ts";
 import { logEdgeError } from "../_shared/server.ts";
 import { loadUserAccess } from "../_shared/user-access.ts";
 
@@ -247,13 +248,18 @@ Deno.serve(async (req) => {
   }
   const input = parsed.value;
 
-  const { data: existing } = await admin
-    .from("trades")
-    .select(TRADE_COLUMNS)
-    .eq("user_id", user.id)
-    .eq("idempotency_key", input.idempotencyKey)
-    .maybeSingle();
-  if (existing) return json({ trade: existing, already: true });
+  const existingRest = await Promise.race([
+    admin
+      .from("trades")
+      .select(TRADE_COLUMNS)
+      .eq("user_id", user.id)
+      .eq("idempotency_key", input.idempotencyKey)
+      .maybeSingle(),
+    new Promise<{ data: null }>((resolve) =>
+      setTimeout(() => resolve({ data: null }), 2_500),
+    ),
+  ]);
+  if (existingRest.data) return json({ trade: existingRest.data, already: true });
 
   let session: DerivSession | null = null;
   let entry = null;
@@ -277,51 +283,132 @@ Deno.serve(async (req) => {
     );
   }
 
-  const common = {
-    p_user_id: user.id,
-    p_symbol: input.symbol,
-    p_contract_type: input.contractType,
-    p_contract_option: input.contractOption,
-    p_selected_digit: input.selectedDigit,
-    p_barrier: input.barrier,
-    p_stake: input.stake,
-    p_payout_rate: payoutRateForRpc(
-      trading.payoutPercent,
-      contractCanWin(input),
-    ),
-    p_entry_price: entry.price,
-    p_entry_epoch: entry.epoch,
-    p_pip_size: entry.pipSize,
-    p_idempotency_key: input.idempotencyKey,
-  };
+  const payoutRate = payoutRateForRpc(
+    trading.payoutPercent,
+    contractCanWin(input),
+  );
   const rpcName =
     input.durationTicks != null ? "place_real_tick_trade" : "place_real_trade";
-  const { data: placed, error } =
-    input.durationTicks != null
-      ? await admin.rpc(rpcName, {
-          ...common,
-          p_duration_ticks: input.durationTicks,
-        })
-      : await admin.rpc(rpcName, {
-          ...common,
-          p_duration_ms: input.durationMs,
-        });
-  if (error || !placed?.trade_id) {
-    const known = error ? PLACE_ERRORS[error.message] : undefined;
+  let placed: { trade_id?: string; already?: boolean } | null = null;
+  let placeError: { message?: string; code?: string } | null = null;
+  try {
+    placed = await callPlaceRealTrade({
+      userId: user.id,
+      symbol: input.symbol,
+      contractType: input.contractType,
+      contractOption: input.contractOption,
+      selectedDigit: input.selectedDigit,
+      barrier: input.barrier,
+      stake: input.stake,
+      payoutRate,
+      entryPrice: entry.price,
+      entryEpoch: entry.epoch,
+      pipSize: entry.pipSize,
+      idempotencyKey: input.idempotencyKey,
+      durationTicks: input.durationTicks,
+      durationMs: input.durationMs,
+    });
+  } catch (err) {
+    console.error(
+      "trading.place.direct",
+      err instanceof Error ? err.message : "error",
+    );
+    const msg = err instanceof Error ? err.message : "";
+    if (/real_trading_disabled|daily_limit_reached|insufficient_funds|too_many_open_trades|stale_entry_tick|invalid_stake|invalid_duration|wallet_not_found|wallet_not_ready|invalid_payout_rate|invalid_contract|invalid_idempotency_key|invalid_entry_tick/i.test(msg)) {
+      placeError = { message: msg.split(" ").pop() ?? msg };
+    }
+  }
+  if (!placed?.trade_id && !placeError) {
+    const common = {
+      p_user_id: user.id,
+      p_symbol: input.symbol,
+      p_contract_type: input.contractType,
+      p_contract_option: input.contractOption,
+      p_selected_digit: input.selectedDigit,
+      p_barrier: input.barrier,
+      p_stake: input.stake,
+      p_payout_rate: payoutRate,
+      p_entry_price: entry.price,
+      p_entry_epoch: entry.epoch,
+      p_pip_size: entry.pipSize,
+      p_idempotency_key: input.idempotencyKey,
+    };
+    const rpcCall =
+      input.durationTicks != null
+        ? admin.rpc(rpcName, {
+            ...common,
+            p_duration_ticks: input.durationTicks,
+          })
+        : admin.rpc(rpcName, {
+            ...common,
+            p_duration_ms: input.durationMs,
+          });
+    const raced = await Promise.race([
+      rpcCall,
+      new Promise<{ data: null; error: { message: string; code: string } }>(
+        (resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                data: null,
+                error: { message: "timeout", code: "57014" },
+              }),
+            8_000,
+          ),
+      ),
+    ]);
+    placed =
+      (raced.data as { trade_id?: string; already?: boolean } | null) ?? null;
+    placeError = raced.error;
+  }
+  if (placeError || !placed?.trade_id) {
+    const known = placeError
+      ? PLACE_ERRORS[placeError.message ?? ""]
+      : undefined;
     if (!known) {
-      await logEdgeError(admin, "trading", rpcName, error ?? NOT_CHARGED, {
-        code: error?.code,
+      await logEdgeError(admin, "trading", rpcName, placeError ?? NOT_CHARGED, {
+        code: placeError?.code,
         userId: user.id,
       });
     }
-    return json({ error: known?.message ?? NOT_CHARGED }, known?.status ?? 500);
+    return json(
+      { error: known?.message ?? NOT_CHARGED },
+      known?.status ?? 500,
+    );
   }
 
-  const { data: trade } = await admin
-    .from("trades")
-    .select(TRADE_COLUMNS)
-    .eq("id", placed.trade_id)
-    .single();
+  let trade: Record<string, unknown> | null = null;
+  try {
+    const rows = await runDirect(
+      (sql) =>
+        sql<Record<string, unknown>[]>`
+          select *
+            from public.trades
+           where id = ${placed!.trade_id}::uuid
+           limit 1
+        `,
+      3_000,
+    );
+    trade = rows[0] ?? null;
+  } catch (err) {
+    console.error(
+      "trading.place.read",
+      err instanceof Error ? err.message : "error",
+    );
+  }
+  if (!trade) {
+    const { data } = await Promise.race([
+      admin
+        .from("trades")
+        .select(TRADE_COLUMNS)
+        .eq("id", placed.trade_id)
+        .single(),
+      new Promise<{ data: null }>((resolve) =>
+        setTimeout(() => resolve({ data: null }), 2_500),
+      ),
+    ]);
+    trade = data;
+  }
   return json({
     trade,
     already: placed.already === true,

@@ -6,7 +6,7 @@ import { safeUserMessage } from '@/lib/safe-user-message'
 import { realTradingService, type RealTradingConfig } from '@/services/real-trading'
 import type { AccountMode } from '@/types'
 
-const CONFIG_BUDGET_MS = 4_500
+const CONFIG_BUDGET_MS = 12_000
 
 export function useRealTradingConfig(kind: AccountMode) {
   const { isSignedIn, user } = useAuthSession()

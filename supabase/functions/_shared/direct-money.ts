@@ -270,6 +270,118 @@ export async function callCreditDeposit(
   );
 }
 
+export type PlaceRealTradeArgs = {
+  userId: string;
+  symbol: string;
+  contractType: string;
+  contractOption: string;
+  selectedDigit: number | null;
+  barrier: number | null;
+  stake: number;
+  payoutRate: number;
+  entryPrice: number;
+  entryEpoch: number;
+  pipSize: number;
+  idempotencyKey: string;
+  durationTicks?: number | null;
+  durationMs?: number | null;
+};
+
+export async function callPlaceRealTrade(
+  input: PlaceRealTradeArgs,
+): Promise<{ trade_id?: string; already?: boolean } | null> {
+  const digit = input.selectedDigit;
+  const barrier = input.barrier;
+  if (input.durationTicks != null) {
+    const rows = await runDirect(
+      (sql) =>
+        sql<{ result: { trade_id?: string; already?: boolean } }[]>`
+          select public.place_real_tick_trade(
+            ${input.userId}::uuid,
+            ${input.symbol},
+            ${input.contractType},
+            ${input.contractOption},
+            ${digit}::smallint,
+            ${barrier}::smallint,
+            ${input.stake}::numeric,
+            ${input.durationTicks}::smallint,
+            ${input.payoutRate}::numeric,
+            ${input.entryPrice}::numeric,
+            ${input.entryEpoch}::bigint,
+            ${input.pipSize}::numeric,
+            ${input.idempotencyKey}
+          ) as result
+        `,
+      8_000,
+    );
+    return rows[0]?.result ?? null;
+  }
+  const rows = await runDirect(
+    (sql) =>
+      sql<{ result: { trade_id?: string; already?: boolean } }[]>`
+        select public.place_real_trade(
+          ${input.userId}::uuid,
+          ${input.symbol},
+          ${input.contractType},
+          ${input.contractOption},
+          ${digit}::smallint,
+          ${barrier}::smallint,
+          ${input.stake}::numeric,
+          ${input.durationMs}::integer,
+          ${input.payoutRate}::numeric,
+          ${input.entryPrice}::numeric,
+          ${input.entryEpoch}::bigint,
+          ${input.pipSize}::numeric,
+          ${input.idempotencyKey}
+        ) as result
+      `,
+    8_000,
+  );
+  return rows[0]?.result ?? null;
+}
+
+export async function loadWithdrawalRow(id: string): Promise<Row | null> {
+  const rows = await runDirect(
+    (sql) => sql<Row[]>`
+      select id, user_id, amount, currency, status, provider, amount_kes, fee_kes,
+             net_kes, msisdn, reference, mpesa_receipt, conversation_id,
+             originator_conversation_id, result_code, result_desc, failure_reason,
+             processing_at, completed_at, failed_at, admin_user_id, admin_note,
+             details, created_at, updated_at
+        from public.withdrawals
+       where id = ${id}::uuid
+       limit 1
+    `,
+    4000,
+  );
+  return rows[0]
+    ? rowOut(rows[0], ["processing_at", "completed_at", "failed_at", "created_at", "updated_at"])
+    : null;
+}
+
+export async function setDepositProviderReference(id: string, reference: string): Promise<void> {
+  await runDirect(
+    (sql) => sql`
+      update public.deposits
+         set provider_reference = ${reference}, updated_at = now()
+       where id = ${id}::uuid
+         and provider_reference is null
+    `,
+    4000,
+  );
+}
+
+export async function markWebhookProcessed(id: string, result: string): Promise<void> {
+  await runDirect(
+    (sql) => sql`
+      update public.megapay_webhook_events
+         set processed = true, process_result = ${result}
+       where id = ${id}::uuid
+    `,
+    4000,
+  );
+}
+
 export async function callRequestWithdrawal(input: {
   userId: string;
   amountUsd: number;
