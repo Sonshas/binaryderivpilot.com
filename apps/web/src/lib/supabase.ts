@@ -40,6 +40,8 @@ function timeoutMsFor(url: string): number {
   if (url.includes('/rest/v1/')) return 2_500
   if (url.includes('/auth/v1/user')) return 2_500
   if (url.includes('/auth/v1/token?grant_type=refresh_token')) return 3_000
+  // REAL place/settle must reach Deriv + Postgres; 8s aborted valid tickets as "unavailable".
+  if (url.includes('/functions/v1/real-trade')) return 25_000
   if (url.includes('/functions/v1/')) return 8_000
   if (url.includes('/auth/v1/')) return 8_000
   return 10_000
