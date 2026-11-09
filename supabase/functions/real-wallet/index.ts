@@ -1,5 +1,5 @@
 ﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { readActivity } from "../_shared/direct-money.ts";
+import { readRealWallet } from "../_shared/direct-money.ts";
 import {
   adminClient,
   corsHeaders,
@@ -7,14 +7,12 @@ import {
   userFromRequest,
 } from "../_shared/server.ts";
 
-type WalletRow = Record<string, unknown>;
-
 const WALLET_COLUMNS =
   "id, user_id, account_id, account_mode, currency, balance, available_balance, locked_balance, status, is_simulated, created_at, updated_at";
 
 /**
- * REAL wallet read that bypasses the hung external PostgREST Data API.
- * Prefer direct Postgres; fall back to in-edge PostgREST (works inside Supabase).
+ * REAL wallet read that bypasses hung external PostgREST.
+ * Keep this path short: one wallet query, then a brief in-edge REST fallback.
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -27,8 +25,13 @@ Deno.serve(async (req) => {
   if (!user) return json({ error: "Sign in to continue." }, 401);
 
   try {
-    const activity = await readActivity(user.id);
-    return json(activity);
+    const wallet = await readRealWallet(user.id);
+    return json({
+      wallet,
+      deposits: [],
+      withdrawals: [],
+      transactions: [],
+    });
   } catch (directErr) {
     console.error(
       "real-wallet.direct",
@@ -45,14 +48,19 @@ Deno.serve(async (req) => {
         .eq("account_mode", "real")
         .maybeSingle(),
       new Promise<{ data: null; error: { message: string } }>((_, reject) => {
-        setTimeout(() => reject(new Error("timeout")), 4_000);
+        setTimeout(() => reject(new Error("timeout")), 3_000);
       }),
     ]);
     if (result.error) {
       console.error("real-wallet.rest", result.error.message);
       return json({ error: "Real balance is unavailable right now." }, 503);
     }
-    return json({ wallet: result.data ?? null });
+    return json({
+      wallet: result.data ?? null,
+      deposits: [],
+      withdrawals: [],
+      transactions: [],
+    });
   } catch {
     console.error("real-wallet", "read timed out");
     return json({ error: "Real balance is unavailable right now." }, 503);

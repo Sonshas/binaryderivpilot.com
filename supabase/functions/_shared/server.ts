@@ -224,21 +224,41 @@ export async function logEdgeError(
   })
 }
 
+function userFromAccessToken(token: string): { id: string; email?: string } | null {
+  const parts = token.split('.')
+  if (parts.length < 2) return null
+  try {
+    const json = atob(parts[1]!.replace(/-/g, '+').replace(/_/g, '/'))
+    const payload = JSON.parse(json) as { sub?: unknown; email?: unknown; exp?: unknown }
+    const id = typeof payload.sub === 'string' ? payload.sub : ''
+    if (!id) return null
+    if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now() - 30_000) return null
+    return {
+      id,
+      email: typeof payload.email === 'string' ? payload.email : undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function userFromRequest(admin: SupabaseClient, req: Request) {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
   if (!token) return null
+  // Gateway already verified JWT for verify_jwt functions. Prefer Auth API, but
+  // never block deposits/balance on a hung getUser — decode the access token.
   try {
     const auth = await Promise.race([
       admin.auth.getUser(token),
       new Promise<null>((_, reject) => {
-        setTimeout(() => reject(new Error('auth timeout')), 4_000)
+        setTimeout(() => reject(new Error('auth timeout')), 2_500)
       }),
     ])
-    if (!auth || auth.error || !auth.data.user) return null
-    return auth.data.user
+    if (auth && !auth.error && auth.data.user) return auth.data.user
   } catch {
-    return null
+    /* fall through to JWT payload */
   }
+  return userFromAccessToken(token)
 }
 
 export async function realPaymentsEnabled(admin: SupabaseClient): Promise<boolean> {
