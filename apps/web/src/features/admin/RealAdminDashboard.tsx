@@ -106,14 +106,20 @@ export function RealAdminDashboard() {
   const load = useCallback(async () => {
     if (!isSignedIn) return
     setLoading(true)
-    const result = await adminDashboardService.load()
-    setLoading(false)
-    if (result.ok) {
-      setData(result.data)
-      setError(null)
-    } else {
+    try {
+      const result = await adminDashboardService.load()
+      if (result.ok) {
+        setData(result.data)
+        setError(null)
+      } else {
+        setData(null)
+        setError(result.error === 'Forbidden' ? 'This page is limited to admin, superadmin, and finance accounts.' : result.error)
+      }
+    } catch (err) {
       setData(null)
-      setError(result.error === 'Forbidden' ? 'This page is limited to admin, superadmin, and finance accounts.' : result.error)
+      setError(err instanceof Error && err.message ? err.message : 'Could not load the dashboard.')
+    } finally {
+      setLoading(false)
     }
   }, [isSignedIn])
 

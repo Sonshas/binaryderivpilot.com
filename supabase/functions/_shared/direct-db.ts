@@ -14,8 +14,9 @@ let poolUrl = "";
 // Newer eu-west-1 projects land on aws-0; older ones used aws-1.
 const POOLER_HOSTS = [
   (Deno.env.get("SUPABASE_POOLER_HOST") ?? "").trim(),
-  "aws-0-eu-west-1.pooler.supabase.com",
+  // Prefer aws-1: aws-0 transaction pooler has been timing out from Edge.
   "aws-1-eu-west-1.pooler.supabase.com",
+  "aws-0-eu-west-1.pooler.supabase.com",
 ].filter(Boolean);
 
 function rewriteToPooler(raw: string, host: string, port: number): string | null {
@@ -29,22 +30,40 @@ function rewriteToPooler(raw: string, host: string, port: number): string | null
   return `${scheme}${auth}@${host}:${port}${path}`;
 }
 
+function withPoolerPort(raw: string, port: number): string {
+  return raw.replace(/(@[^/?]+)(?::\d+)?(?=\/|\?|$)/, (_match, host: string) => `${host}:${port}`);
+}
+
+function swapPoolerHost(raw: string, host: string): string {
+  return raw.replace(/@[^/@?]+\.pooler\.supabase\.com/i, `@${host}`);
+}
+
 function databaseUrlCandidates(): string[] {
   const raw = Deno.env.get("SUPABASE_DB_URL") ?? "";
   if (!raw) throw new Error("timeout");
-  // Already a pooler URL — keep as-is first, then also try 6543 if on 5432.
-  if (/pooler\.supabase\.com/i.test(raw)) {
-    const alts: string[] = [raw];
-    if (/:(5432)\//.test(raw) || /:5432$/.test(raw)) {
-      alts.push(raw.replace(":5432", ":6543"));
-    }
-    return alts;
-  }
   const out: string[] = [];
+  const push = (url: string) => {
+    if (url && !out.includes(url)) out.push(url);
+  };
+  // Transaction pooler (6543) first — session mode (5432) often drops Edge sockets.
+  // Also rotate aws-0 / aws-1: one region pooler host often times out from Edge.
+  if (/pooler\.supabase\.com/i.test(raw)) {
+    const hosts = [
+      ...POOLER_HOSTS,
+      "aws-1-eu-west-1.pooler.supabase.com",
+      "aws-0-eu-west-1.pooler.supabase.com",
+    ].filter(Boolean);
+    for (const host of hosts) {
+      const onHost = swapPoolerHost(raw, host);
+      push(withPoolerPort(onHost, 6543));
+      push(withPoolerPort(onHost, 5432));
+    }
+    return out.length ? out : [raw];
+  }
   for (const host of POOLER_HOSTS) {
     for (const port of [6543, 5432]) {
       const rewritten = rewriteToPooler(raw, host, port);
-      if (rewritten) out.push(rewritten);
+      if (rewritten) push(rewritten);
     }
   }
   return out.length ? out : [raw];

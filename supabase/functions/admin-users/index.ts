@@ -1,8 +1,9 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
+import type { SupabaseClient, User } from 'npm:@supabase/supabase-js@2'
 import { readAllPages, readByIds } from '../_shared/admin-batch.ts'
 import { isCreditedDeposit, toDashboardDeposit, type DepositSource } from '../_shared/admin-dashboard.ts'
 import { appRole, isAdmin, writeAudit } from '../_shared/admin-staff.ts'
+import { loadAdminDepositsList, loadAdminUserListRows } from '../_shared/direct-admin.ts'
 import { adminClient, corsHeaders, json, logEdgeError, userFromRequest } from '../_shared/server.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -161,12 +162,53 @@ async function tradeCounts(admin: SupabaseClient, userIds: string[]) {
   return map
 }
 
+function decodePart(part: string): Record<string, unknown> | null {
+  try {
+    const padded = part.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (part.length % 4)) % 4)
+    const parsed = JSON.parse(atob(padded)) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>
+  } catch {
+    return null
+  }
+  return null
+}
+
+function userFromVerifiedJwt(req: Request): User | null {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  const parts = token.split('.')
+  if (parts.length !== 3 || !parts[1]) return null
+  const claims = decodePart(parts[1])
+  if (!claims || claims.role !== 'authenticated') return null
+  const id = typeof claims.sub === 'string' ? claims.sub : ''
+  const email = typeof claims.email === 'string' ? claims.email : ''
+  if (!UUID_RE.test(id) || !email.includes('@')) return null
+  const appMeta =
+    claims.app_metadata && typeof claims.app_metadata === 'object' && !Array.isArray(claims.app_metadata)
+      ? (claims.app_metadata as Record<string, unknown>)
+      : {}
+  return { id, email, app_metadata: appMeta, user_metadata: {} } as User
+}
+
+async function caller(admin: ReturnType<typeof adminClient>, req: Request): Promise<User | null> {
+  const verified = userFromVerifiedJwt(req)
+  try {
+    const live = await Promise.race([
+      userFromRequest(admin, req),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_200)),
+    ])
+    if (live) return live
+  } catch {
+    /* gateway-verified JWT is enough */
+  }
+  return verified
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
   const admin = adminClient()
-  const actor = await userFromRequest(admin, req)
+  const actor = await caller(admin, req)
   if (!actor) return json({ error: 'Sign in as an admin.' }, 401)
   if (!isAdmin(actor)) {
     console.log('admin-users forbidden', actor.id, appRole(actor))
@@ -183,54 +225,65 @@ Deno.serve(async (req) => {
 
   try {
     if (action === 'list') {
-      const users = await loadUserRows(admin)
-      const ids = users.map((u) => String(u.id))
-      const [wallets, profiles, deps, opens, trades] = await Promise.all([
-        walletsByUser(admin, ids),
-        profilesByUser(admin, ids),
-        depositStats(admin, ids),
-        openWithdrawals(admin, ids),
-        tradeCounts(admin, ids),
-      ])
-      const rows = users.map((u) => {
-        const id = String(u.id)
-        const wallet = wallets.get(id)
-        const profile = profiles.get(id)
-        const col = deps.collected.get(id)
-        return {
-          id,
-          email: u.email ?? null,
-          name: u.name ?? profile?.display_name ?? null,
-          phone: profile?.phone ?? '',
-          country: profile?.country ?? '',
-          role: u.role ?? 'trader',
-          account_status: u.account_status ?? 'active',
-          live_trading_enabled: u.live_trading_enabled !== false,
-          deposits_enabled: u.deposits_enabled !== false,
-          withdrawals_enabled: u.withdrawals_enabled !== false,
-          win_rate_percent: u.win_rate_percent == null ? null : Number(u.win_rate_percent),
-          withdraw_verification_enabled:
-            u.withdraw_verification_enabled == null ? null : u.withdraw_verification_enabled === true,
-          withdraw_scanner_enabled:
-            u.withdraw_scanner_enabled == null ? null : u.withdraw_scanner_enabled === true,
-          withdraw_tax_enabled:
-            u.withdraw_tax_enabled == null ? null : u.withdraw_tax_enabled === true,
-          is_vip: u.is_vip === true,
-          withdraw_gates_cleared: u.withdraw_gates_cleared === true,
-          kyc_status: u.kyc_status ?? 'not_started',
-          created_at: u.created_at,
-          available_usd: wallet?.available ?? 0,
-          locked_usd: wallet?.locked ?? 0,
-          balance_usd: wallet?.balance ?? 0,
-          collected_usd: col ? Math.round(col.usd * 100) / 100 : 0,
-          collected_kes: col ? Math.round(col.kes * 100) / 100 : 0,
-          collected_count: col?.count ?? 0,
-          open_withdrawals: opens.get(id) ?? 0,
-          pending_deposits: deps.openFail.get(id) ?? 0,
-          trade_count: trades.get(id) ?? 0,
-        }
-      })
-      return json({ users: rows })
+      try {
+        const rows = await loadAdminUserListRows()
+        console.log('admin-users list', actor.id, rows.length)
+        return json({ users: rows })
+      } catch (directErr) {
+        console.error('admin-users.list.direct', directErr instanceof Error ? directErr.message : 'error')
+        // Last-resort PostgREST path (often hung externally; may still answer in-edge).
+        const users = await Promise.race([
+          loadUserRows(admin),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
+        ])
+        const ids = users.map((u) => String(u.id))
+        const [wallets, profiles, deps, opens, trades] = await Promise.all([
+          walletsByUser(admin, ids),
+          profilesByUser(admin, ids),
+          depositStats(admin, ids),
+          openWithdrawals(admin, ids),
+          tradeCounts(admin, ids),
+        ])
+        const rows = users.map((u) => {
+          const id = String(u.id)
+          const wallet = wallets.get(id)
+          const profile = profiles.get(id)
+          const col = deps.collected.get(id)
+          return {
+            id,
+            email: u.email ?? null,
+            name: u.name ?? profile?.display_name ?? null,
+            phone: profile?.phone ?? '',
+            country: profile?.country ?? '',
+            role: u.role ?? 'trader',
+            account_status: u.account_status ?? 'active',
+            live_trading_enabled: u.live_trading_enabled !== false,
+            deposits_enabled: u.deposits_enabled !== false,
+            withdrawals_enabled: u.withdrawals_enabled !== false,
+            win_rate_percent: u.win_rate_percent == null ? null : Number(u.win_rate_percent),
+            withdraw_verification_enabled:
+              u.withdraw_verification_enabled == null ? null : u.withdraw_verification_enabled === true,
+            withdraw_scanner_enabled:
+              u.withdraw_scanner_enabled == null ? null : u.withdraw_scanner_enabled === true,
+            withdraw_tax_enabled:
+              u.withdraw_tax_enabled == null ? null : u.withdraw_tax_enabled === true,
+            is_vip: u.is_vip === true,
+            withdraw_gates_cleared: u.withdraw_gates_cleared === true,
+            kyc_status: u.kyc_status ?? 'not_started',
+            created_at: u.created_at,
+            available_usd: wallet?.available ?? 0,
+            locked_usd: wallet?.locked ?? 0,
+            balance_usd: wallet?.balance ?? 0,
+            collected_usd: col ? Math.round(col.usd * 100) / 100 : 0,
+            collected_kes: col ? Math.round(col.kes * 100) / 100 : 0,
+            collected_count: col?.count ?? 0,
+            open_withdrawals: opens.get(id) ?? 0,
+            pending_deposits: deps.openFail.get(id) ?? 0,
+            trade_count: trades.get(id) ?? 0,
+          }
+        })
+        return json({ users: rows })
+      }
     }
 
     if (action === 'get') {
@@ -649,40 +702,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'deposits_list') {
-      const { data, error } = await admin
-        .from('deposits')
-        .select(
-          'id, user_id, amount, currency, status, provider, method, mpesa_receipt, callback_amount_kes, details, created_at, updated_at',
-        )
-        .eq('account_mode', 'real')
-        .eq('is_simulated', false)
-        .eq('status', 'COMPLETED')
-        .order('created_at', { ascending: false })
-        .limit(300)
-      if (error) return json({ error: error.message }, 500)
-      const users = await loadUserRows(admin)
-      const emailById = new Map(users.map((u) => [String(u.id), (u.email as string | null) ?? null]))
-      const rows = (data ?? []).map((raw) => {
-        const row = raw as Record<string, unknown>
-        const details = asRecord(row.details)
-        const source: DepositSource = {
-          id: String(row.id),
-          user_id: String(row.user_id),
-          amount: (row.amount as number | string | null) ?? null,
-          currency: (row.currency as string | null) ?? null,
-          status: (row.status as string | null) ?? null,
-          provider: (row.provider as string | null) ?? null,
-          method: (row.method as string | null) ?? null,
-          mpesa_receipt: (row.mpesa_receipt as string | null) ?? null,
-          callback_amount_kes: (row.callback_amount_kes as number | string | null) ?? null,
-          details,
-          created_at: String(row.created_at ?? ''),
-          updated_at: String(row.updated_at ?? ''),
-          is_simulated: false,
-          account_mode: 'real',
-        }
+      const deposits = await loadAdminDepositsList(300)
+      const rows = deposits.map((source) => {
         const mapped = toDashboardDeposit(source)
-        return { ...mapped, user_email: emailById.get(String(row.user_id)) ?? null }
+        return { ...mapped, user_email: source.user_email }
       })
       return json({ rows })
     }

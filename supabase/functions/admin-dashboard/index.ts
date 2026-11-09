@@ -1,113 +1,59 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
-import type { SupabaseClient, User } from 'npm:@supabase/supabase-js@2'
-import {
-  collectedTotals,
-  mergeJoinedUsers,
-  splitMpesaDeposits,
-  type AuthUserSource,
-  type DepositSource,
-  type PublicUserSource,
-} from '../_shared/admin-dashboard.ts'
+import type { User } from 'npm:@supabase/supabase-js@2'
+import { collectedTotals, mergeJoinedUsers, splitMpesaDeposits } from '../_shared/admin-dashboard.ts'
 import { isAdmin } from '../_shared/admin-staff.ts'
-import { adminClient, corsHeaders, json, logEdgeError, userFromRequest } from '../_shared/server.ts'
-
-const DEPOSIT_COLUMNS =
-  'id, user_id, amount, currency, status, provider, method, mpesa_receipt, callback_amount_kes, details, created_at, updated_at, is_simulated, account_mode'
-
-const PAGE = 1000
-const MAX_PAGES = 10
+import { loadAdminDashboardSources } from '../_shared/direct-admin.ts'
+import { adminClient, corsHeaders, json, userFromRequest } from '../_shared/server.ts'
 
 function appRole(user: User): string {
   const meta = (user.app_metadata ?? {}) as Record<string, unknown>
   return typeof meta.role === 'string' ? meta.role.trim() : ''
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+function decodePart(part: string): Record<string, unknown> | null {
+  try {
+    const padded = part.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (part.length % 4)) % 4)
+    const json = JSON.parse(atob(padded)) as unknown
+    if (json && typeof json === 'object' && !Array.isArray(json)) return json as Record<string, unknown>
+  } catch {
+    return null
+  }
   return null
 }
 
-async function loadDeposits(admin: SupabaseClient): Promise<DepositSource[]> {
-  const rows: DepositSource[] = []
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const from = page * PAGE
-    const { data, error } = await admin
-      .from('deposits')
-      .select(DEPOSIT_COLUMNS)
-      .eq('account_mode', 'real')
-      .eq('is_simulated', false)
-      .eq('method', 'mpesa')
-      .order('created_at', { ascending: false })
-      .range(from, from + PAGE - 1)
-    if (error) {
-      await logEdgeError(admin, 'admin', 'admin-dashboard.deposits', error, { code: error.code })
-      throw new Error('deposits query failed')
-    }
-    for (const raw of data ?? []) {
-      const row = raw as Record<string, unknown>
-      rows.push({
-        id: String(row.id),
-        user_id: String(row.user_id),
-        amount: (row.amount as number | string | null) ?? null,
-        currency: (row.currency as string | null) ?? null,
-        status: (row.status as string | null) ?? null,
-        provider: (row.provider as string | null) ?? null,
-        method: (row.method as string | null) ?? null,
-        mpesa_receipt: (row.mpesa_receipt as string | null) ?? null,
-        callback_amount_kes: (row.callback_amount_kes as number | string | null) ?? null,
-        details: asRecord(row.details),
-        created_at: String(row.created_at ?? ''),
-        updated_at: String(row.updated_at ?? ''),
-        is_simulated: row.is_simulated === true,
-        account_mode: (row.account_mode as string | null) ?? null,
-      })
-    }
-    if (!data || data.length < PAGE) break
-  }
-  return rows
+/**
+ * The function gateway already verified this bearer JWT (verify_jwt stays on).
+ * Use it when GoTrue getUser does not answer, so a signed-in admin is not stuck.
+ * Service-role and anon tokens are rejected.
+ */
+function userFromVerifiedJwt(req: Request): User | null {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+  const parts = token.split('.')
+  if (parts.length !== 3 || !parts[1]) return null
+  const claims = decodePart(parts[1])
+  if (!claims || claims.role !== 'authenticated') return null
+  const id = typeof claims.sub === 'string' ? claims.sub : ''
+  const email = typeof claims.email === 'string' ? claims.email : ''
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null
+  if (!email.includes('@')) return null
+  const appMeta = claims.app_metadata && typeof claims.app_metadata === 'object' && !Array.isArray(claims.app_metadata)
+    ? claims.app_metadata as Record<string, unknown>
+    : {}
+  return { id, email, app_metadata: appMeta, user_metadata: {} } as User
 }
 
-async function loadAuthUsers(admin: SupabaseClient): Promise<AuthUserSource[]> {
-  const users: AuthUserSource[] = []
-  for (let page = 1; page <= 20; page++) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
-    if (error) {
-      await logEdgeError(admin, 'admin', 'admin-dashboard.auth_users', error, { code: error.code ?? error.name })
-      throw new Error('auth users query failed')
-    }
-    for (const authUser of data.users) {
-      const meta = (authUser.app_metadata ?? {}) as Record<string, unknown>
-      users.push({
-        id: authUser.id,
-        email: authUser.email ?? null,
-        created_at: authUser.created_at,
-        app_role: typeof meta.role === 'string' ? meta.role : null,
-      })
-    }
-    if (data.users.length < 200) break
+async function caller(admin: ReturnType<typeof adminClient>, req: Request): Promise<User | null> {
+  const verified = userFromVerifiedJwt(req)
+  try {
+    const live = await Promise.race([
+      userFromRequest(admin, req),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_200)),
+    ])
+    if (live) return live
+  } catch {
+    /* GoTrue did not answer; the gateway-verified token is enough. */
   }
-  return users
-}
-
-async function loadProfiles(admin: SupabaseClient): Promise<PublicUserSource[]> {
-  const rows: PublicUserSource[] = []
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const from = page * PAGE
-    const { data, error } = await admin.from('users').select('id, email, role').range(from, from + PAGE - 1)
-    if (error) {
-      await logEdgeError(admin, 'admin', 'admin-dashboard.profiles', error, { code: error.code })
-      throw new Error('profiles query failed')
-    }
-    for (const row of data ?? []) {
-      rows.push({
-        id: String(row.id),
-        email: typeof row.email === 'string' ? row.email : null,
-        role: typeof row.role === 'string' ? row.role : null,
-      })
-    }
-    if (!data || data.length < PAGE) break
-  }
-  return rows
+  return verified
 }
 
 Deno.serve(async (req) => {
@@ -115,7 +61,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
   const admin = adminClient()
-  const user = await userFromRequest(admin, req)
+  const user = await caller(admin, req)
   if (!user) return json({ error: 'Sign in as an admin.' }, 401)
   if (!isAdmin(user)) {
     console.log('admin-dashboard forbidden', user.id, appRole(user) || 'trader')
@@ -131,11 +77,7 @@ Deno.serve(async (req) => {
   if (body.action !== 'overview') return json({ error: 'Unknown action.' }, 400)
 
   try {
-    const [authUsers, profiles, deposits] = await Promise.all([
-      loadAuthUsers(admin),
-      loadProfiles(admin),
-      loadDeposits(admin),
-    ])
+    const { authUsers, profiles, deposits } = await loadAdminDashboardSources()
     const users = mergeJoinedUsers(authUsers, profiles)
     const emails = new Map(users.map((row) => [row.id, row.email]))
     const { collected, other } = splitMpesaDeposits(deposits)
@@ -157,7 +99,8 @@ Deno.serve(async (req) => {
       },
     })
   } catch (err) {
-    await logEdgeError(admin, 'admin', 'admin-dashboard.overview', err)
+    const message = err instanceof Error ? err.message : 'error'
+    console.error('admin-dashboard.overview', message.replace(/postgres(?:ql)?:\/\/\S+/gi, '[db]').slice(0, 180))
     return json({ error: 'Could not load the dashboard.' }, 500)
   }
 })

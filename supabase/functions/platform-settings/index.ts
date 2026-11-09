@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { isAdmin } from '../_shared/admin-staff.ts'
 import { parseDepositProvider, type DepositProvider } from '../_shared/daraja.ts'
+import { loadMemberGateState } from '../_shared/direct-admin.ts'
 import {
   enabledSettingKey,
   parseMegapayAccounts,
@@ -166,31 +167,9 @@ async function saveMegapayAccounts(
   return publicMegapayAccounts(accounts, map)
 }
 
-async function memberGateState(admin: SupabaseClient, userId: string) {
-  const [{ data: deposits }, { data: profile }] = await Promise.all([
-    admin
-      .from('deposits')
-      .select('details, status')
-      .eq('user_id', userId)
-      .eq('status', 'COMPLETED')
-      .limit(200),
-    admin.from('profiles').select('withdraw_place').eq('user_id', userId).maybeSingle(),
-  ])
-  const paid: Partial<Record<ExternalKind, string>> = {}
-  for (const row of deposits ?? []) {
-    const details = (row as { details?: Record<string, unknown> | null }).details
-    if (!details || typeof details !== 'object') continue
-    const kind = String(details.kind ?? '')
-    if (kind === 'verification' || kind === 'scanner' || kind === 'tax') {
-      paid[kind] = new Date().toISOString()
-    }
-  }
-  const placeRaw = (profile as { withdraw_place?: string | null } | null)?.withdraw_place
-  const place =
-    placeRaw === 'form' || placeRaw === 'verification' || placeRaw === 'scanner' || placeRaw === 'tax'
-      ? placeRaw
-      : null
-  return { paid, place }
+async function memberGateState(_admin: SupabaseClient, userId: string) {
+  // PostgREST hangs from Edge; use the same direct pooler path as real-wallet.
+  return await loadMemberGateState(userId)
 }
 
 Deno.serve(async (req) => {

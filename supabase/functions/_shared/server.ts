@@ -224,18 +224,33 @@ export async function logEdgeError(
   })
 }
 
-function userFromAccessToken(token: string): { id: string; email?: string } | null {
+function userFromAccessToken(token: string): {
+  id: string
+  email?: string
+  app_metadata?: Record<string, unknown>
+} | null {
   const parts = token.split('.')
-  if (parts.length < 2) return null
+  if (parts.length < 2 || !parts[1]) return null
   try {
-    const json = atob(parts[1]!.replace(/-/g, '+').replace(/_/g, '/'))
-    const payload = JSON.parse(json) as { sub?: unknown; email?: unknown; exp?: unknown }
+    const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (parts[1].length % 4)) % 4)
+    const json = atob(padded)
+    const payload = JSON.parse(json) as {
+      sub?: unknown
+      email?: unknown
+      exp?: unknown
+      app_metadata?: unknown
+    }
     const id = typeof payload.sub === 'string' ? payload.sub : ''
     if (!id) return null
     if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now() - 30_000) return null
+    const appMeta =
+      payload.app_metadata && typeof payload.app_metadata === 'object' && !Array.isArray(payload.app_metadata)
+        ? (payload.app_metadata as Record<string, unknown>)
+        : undefined
     return {
       id,
       email: typeof payload.email === 'string' ? payload.email : undefined,
+      app_metadata: appMeta,
     }
   } catch {
     return null

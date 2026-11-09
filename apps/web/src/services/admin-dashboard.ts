@@ -1,8 +1,11 @@
+import { abortSignalAfter, raceWithTimeout } from '@/lib/abort-timeout'
 import { getSupabase } from '@/lib/supabase'
 import type { Result } from '@/services/megapay'
 import { reportBackendIssue } from '@/services/system-issues'
 
 const FUNCTION = 'admin-dashboard'
+/** Direct SQL + pooler retry can take a few seconds; keep under the Edge wall clock. */
+const LOAD_MS = 16_000
 
 export interface DashboardUserRow {
   id: string
@@ -106,10 +109,27 @@ export const adminDashboardService = {
   async load(): Promise<Result<AdminDashboard>> {
     const client = getSupabase()
     if (!client) return { ok: false, error: 'Dashboard is temporarily unavailable.' }
-    const { data, error } = await client.functions.invoke<Record<string, unknown>>(FUNCTION, {
-      method: 'POST',
-      body: { action: 'overview' },
-    })
+    let data: Record<string, unknown> | null = null
+    let error: unknown = null
+    try {
+      const result = await raceWithTimeout(
+        client.functions.invoke<Record<string, unknown>>(FUNCTION, {
+          method: 'POST',
+          body: { action: 'overview' },
+          signal: abortSignalAfter(LOAD_MS),
+        }),
+        LOAD_MS,
+        'Could not load the dashboard.',
+      )
+      data = result.data
+      error = result.error
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ''
+      if (!/timed out|timeout|could not load the dashboard/i.test(message)) {
+        reportBackendIssue('admin', 'admin-dashboard.overview', err)
+      }
+      return { ok: false, error: 'Could not load the dashboard.' }
+    }
     if (error || !data) {
       const message = await functionError(error)
       const status = contextStatus(error)
