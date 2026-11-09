@@ -15,11 +15,9 @@ const SAMPLE_WINDOW = 100
 const RING_R = 14
 const RING_CIRC = 2 * Math.PI * RING_R
 
-function digitTone(wins: boolean, current: boolean, cursor: TradeResultAnimationState['status'] | null) {
+function digitTone(wins: boolean, current: boolean) {
   const win = { stroke: '#00D094', text: '#00D094', track: 'rgba(0,208,148,0.22)' }
   const loss = { stroke: '#ff4d6a', text: '#ff4d6a', track: 'rgba(255,77,106,0.2)' }
-  if (cursor === 'lost') return { ...loss, glow: 'drop-shadow(0 0 7px #ff4d6a)' }
-  if (cursor === 'won' || cursor === 'running' || cursor === 'settling') return { ...win, glow: 'drop-shadow(0 0 7px #00c896)' }
   const tone = wins ? win : loss
   return { ...tone, glow: current ? `drop-shadow(0 0 7px ${tone.stroke})` : 'none' }
 }
@@ -82,11 +80,10 @@ export function DigitRow({
             const hot = scan.sampleSize > 0 && !uniform && scan.hottest.includes(digit)
             const cold = scan.sampleSize > 0 && !uniform && scan.coldest.includes(digit)
             const isCurrent = !anim && lastDigit === digit
-            const cursorHere = anim?.cursorDigit === digit
             const wins = contractDigitWins(digit, ticket, winRatePercent)
             const share = scan.sampleSize > 0 ? (count / scan.sampleSize) * 100 : 0
             const fill = maxCount === minCount ? 0.55 : (count - minCount) / (maxCount - minCount)
-            const tone = digitTone(wins, isCurrent, cursorHere && anim ? anim.status : null)
+            const tone = digitTone(wins, isCurrent)
             return (
               <div
                 key={digit}
@@ -112,7 +109,7 @@ export function DigitRow({
                     r={RING_R}
                     fill="none"
                     stroke={tone.stroke}
-                    strokeWidth={isCurrent || cursorHere ? 4 : 3.5}
+                    strokeWidth={isCurrent ? 4 : 3.5}
                     strokeLinecap="round"
                     strokeDasharray={RING_CIRC}
                     strokeDashoffset={RING_CIRC - Math.max(0.12, fill) * RING_CIRC}
