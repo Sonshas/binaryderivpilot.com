@@ -16,6 +16,8 @@ import { WITHDRAWAL_POLL_MS, withdrawalService } from '@/services/withdrawals'
 import type { AccountMode, Deposit, Transaction, Wallet, Withdrawal } from '@/types'
 import { demoAccountUpper } from '@/lib/branding'
 
+const REAL_WALLET_CACHE_KEY = 'sbb:real-wallet-v1'
+
 function useRealWalletRefreshKey(kind: AccountMode): number {
   const [key, setKey] = useState(0)
   useEffect(() => {
@@ -42,13 +44,49 @@ function readDemoHistory(): {
   }
 }
 
+function readCachedRealWallet(userId: string | undefined): Wallet | null {
+  if (!userId) return null
+  try {
+    const raw = sessionStorage.getItem(REAL_WALLET_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { userId?: string; wallet?: Wallet; at?: number }
+    if (parsed.userId !== userId || !parsed.wallet) return null
+    if (typeof parsed.at === 'number' && Date.now() - parsed.at > 30 * 60_000) return null
+    return parsed.wallet
+  } catch {
+    return null
+  }
+}
+
+function writeCachedRealWallet(userId: string, wallet: Wallet) {
+  try {
+    sessionStorage.setItem(
+      REAL_WALLET_CACHE_KEY,
+      JSON.stringify({ userId, wallet, at: Date.now() }),
+    )
+  } catch {
+    /* private mode */
+  }
+}
+
 export function useWallet(kind: AccountMode) {
   const { isSignedIn, user } = useAuthSession()
   const [demoWallet, setDemoWallet] = useState<Wallet>(() => readDemoWallet())
-  const [realWallet, setRealWallet] = useState<Wallet | null>(null)
+  const [realWallet, setRealWallet] = useState<Wallet | null>(() =>
+    kind === 'real' ? readCachedRealWallet(user?.id) : null,
+  )
   const [message, setMessage] = useState('')
-  const [loading, setLoading] = useState(kind === 'real')
-  const [walletConnected, setWalletConnected] = useState(false)
+  const cached = kind === 'real' ? readCachedRealWallet(user?.id) : null
+  const [loading, setLoading] = useState(kind === 'real' && !cached)
+  const [walletConnected, setWalletConnected] = useState(
+    () =>
+      Boolean(
+        cached &&
+          !cached.isSimulated &&
+          cached.availableBalance != null &&
+          (cached.status === 'ready' || cached.status === 'empty'),
+      ),
+  )
   const refreshKey = useRealWalletRefreshKey(kind)
 
   useEffect(() => {
@@ -63,9 +101,9 @@ export function useWallet(kind: AccountMode) {
   useEffect(() => {
     if (kind !== 'real') return
     let cancelled = false
-    if (refreshKey === 0) {
+    const hadCache = Boolean(realWallet)
+    if (refreshKey === 0 && !hadCache) {
       setLoading(true)
-      setRealWallet(null)
       setWalletConnected(false)
     }
     void walletService
@@ -81,11 +119,16 @@ export function useWallet(kind: AccountMode) {
           (result.data.status === 'ready' || result.data.status === 'empty')
         setWalletConnected(readable)
         setMessage(result.message)
+        if (readable && result.data && user?.id) {
+          writeCachedRealWallet(user.id, result.data)
+        }
       })
       .catch(() => {
         if (cancelled) return
-        setRealWallet(null)
-        setWalletConnected(false)
+        if (!hadCache) {
+          setRealWallet(null)
+          setWalletConnected(false)
+        }
         setMessage('Real wallet could not be loaded. Please try again later.')
       })
       .finally(() => {
@@ -132,13 +175,13 @@ export function useWallet(kind: AccountMode) {
   }
 }
 
-export function useWalletHistory(kind: AccountMode) {
+export function useWalletHistory(kind: AccountMode, enabled = true) {
   const { isSignedIn, user } = useAuthSession()
   const [demoHistory, setDemoHistory] = useState(() => readDemoHistory())
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [deposits, setDeposits] = useState<Deposit[]>([])
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
-  const [loading, setLoading] = useState(kind === 'real')
+  const [loading, setLoading] = useState(kind === 'real' && enabled)
   const [message, setMessage] = useState('')
   const refreshKey = useRealWalletRefreshKey(kind)
 
@@ -151,13 +194,13 @@ export function useWalletHistory(kind: AccountMode) {
   }, [kind])
 
   useEffect(() => {
-    if (kind !== 'real') return
+    if (kind !== 'real' || !enabled) {
+      if (!enabled) setLoading(false)
+      return
+    }
     let cancelled = false
     if (refreshKey === 0) {
       setLoading(true)
-      setTransactions([])
-      setDeposits([])
-      setWithdrawals([])
     }
     void Promise.all([
       walletService.listTransactions('real'),
@@ -180,16 +223,16 @@ export function useWalletHistory(kind: AccountMode) {
     return () => {
       cancelled = true
     }
-  }, [kind, isSignedIn, user?.id, refreshKey])
+  }, [kind, isSignedIn, user?.id, refreshKey, enabled])
 
   const hasOpenWithdrawal = kind === 'real' && withdrawals.some((w) => isOpenWithdrawalStatus(w.status))
   useEffect(() => {
-    if (kind !== 'real' || !user?.id) return
+    if (kind !== 'real' || !user?.id || !enabled) return
     return withdrawalService.subscribe(user.id, notifyRealWalletChanged, {
       channel: `wallet-history:${user.id}`,
       pollMs: hasOpenWithdrawal ? WITHDRAWAL_POLL_MS : 0,
     })
-  }, [kind, user?.id, hasOpenWithdrawal])
+  }, [kind, user?.id, hasOpenWithdrawal, enabled])
 
   if (kind === 'demo') {
     return {
@@ -203,4 +246,3 @@ export function useWalletHistory(kind: AccountMode) {
 
   return { transactions, deposits, withdrawals, loading, message }
 }
-

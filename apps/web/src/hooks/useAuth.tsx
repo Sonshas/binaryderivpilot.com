@@ -22,9 +22,13 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [message, setMessage] = useState('')
+  const peeked = authService.peekSession()
+  const [user, setUser] = useState<User | null>(peeked)
+  // If we already have a persisted session, do not block the app shell.
+  const [loading, setLoading] = useState(!peeked)
+  const [message, setMessage] = useState(
+    peeked ? `Session active for ${peeked.email}.` : '',
+  )
 
   const refresh = useCallback(async () => {
     const result = await authService.getSession()
@@ -44,8 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (cancelled) return
-        setUser(null)
-        setMessage('Sign-in is temporarily unavailable.')
+        if (!authService.peekSession()) {
+          setUser(null)
+          setMessage('Sign-in is temporarily unavailable.')
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)

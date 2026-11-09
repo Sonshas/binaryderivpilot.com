@@ -134,8 +134,9 @@ function mapWallet(row: {
 /**
  * A hung Data API left Deposit and Trade on "Loading…". Prefer the real-wallet
  * Edge Function (direct Postgres) and fail the PostgREST fallback quickly.
+ * Keep this under the shell's perceived "snappy" budget.
  */
-const WALLET_READ_TIMEOUT_MS = 6_000;
+const WALLET_READ_TIMEOUT_MS = 4_500;
 
 type WalletRow = {
   id: string;

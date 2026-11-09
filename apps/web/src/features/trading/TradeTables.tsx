@@ -91,11 +91,16 @@ export function TradeTables({
 }) {
   const [tab, setTab] = useState(initialTab);
   const { open, history, loading } = useTrades(kind);
-  const { transactions, loading: txLoading } = useWalletHistory(kind);
+  // Defer ledger reads until the Transactions tab is opened — they competed
+  // with real-wallet / market feed for the same Supabase host.
+  const { transactions, loading: txLoading } = useWalletHistory(
+    kind,
+    tab === "tx",
+  );
   const now = Date.now();
   const isDemo = kind === "demo";
   const firstLoad =
-    (loading || txLoading) &&
+    (loading || (tab === "tx" && txLoading)) &&
     open.length === 0 &&
     history.length === 0 &&
     transactions.length === 0;

@@ -23,8 +23,8 @@ export interface DepositConfig extends MegapayDepositConfig {
 export type DepositState = MegapayDepositState
 
 const DARAJA_FUNCTIONS = { start: 'mpesa-deposit', status: 'mpesa-status' } as const
-/** Browser + Edge cold starts regularly exceeded 5s and left the form on "busy". */
-const CONFIG_BUDGET_MS = 12_000
+/** Keep the deposit form moving; fall back to saved fees if Edge is cold/slow. */
+const CONFIG_BUDGET_MS = 5_000
 const CONFIG_BUSY = 'Deposits are busy right now. Please try again.'
 
 export function resolveDepositProvider(raw: unknown): DepositProvider {

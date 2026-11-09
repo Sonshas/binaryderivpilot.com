@@ -103,7 +103,7 @@ function TradeCard({ trade, now }: { trade: Trade; now: number }) {
 export function TicketTrades({ kind }: { kind: AccountMode }) {
   const [tab, setTab] = useState<TabId>("open");
   const { open, history } = useTrades(kind);
-  const { transactions } = useWalletHistory(kind);
+  const { transactions } = useWalletHistory(kind, tab === "tx");
   useTickVersion(open.map((trade) => trade.symbol));
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

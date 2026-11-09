@@ -41,7 +41,11 @@ import {
 import { reportBackendIssue } from "@/services/system-issues";
 import { accountEnabled } from "@/lib/account-access";
 import { roleWithAdminList } from "@/lib/admin-emails";
-import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
+import {
+  getSupabase,
+  isSupabaseConfigured,
+  peekStoredAuthUser,
+} from "@/lib/supabase";
 import { notConnected, okReal } from "@/providers/results";
 import type {
   AccountStatus,
@@ -51,6 +55,8 @@ import type {
   UserRole,
 } from "@/types";
 import { demoAccountShort } from "@/lib/branding";
+
+const SESSION_READ_MS = 2_500;
 
 export const e2eAuthBypassEnabled =
   import.meta.env.DEV && import.meta.env.VITE_E2E_AUTH_BYPASS === "true";
@@ -798,6 +804,19 @@ export const authService = {
     );
   },
 
+  /** Sync session from localStorage so the shell can paint before Auth API responds. */
+  peekSession(): User | null {
+    if (e2eAuthBypassEnabled) return getDemoSessionUser();
+    const stored = peekStoredAuthUser();
+    if (!stored?.id) return null;
+    return userFromAuthOnly({
+      id: stored.id,
+      email: stored.email,
+      created_at: stored.created_at,
+      user_metadata: stored.user_metadata ?? {},
+    } as AuthUser);
+  },
+
   async getSession(): Promise<ProviderResult<User | null>> {
     if (e2eAuthBypassEnabled) {
       const user = getDemoSessionUser();
@@ -815,14 +834,33 @@ export const authService = {
     }
     if (!isSupabaseConfigured) return authNotConfigured(null);
     const client = getSupabase()!;
-    const { data, error } = await client.auth.getSession();
-    if (error) {
-      return notConnected(
-        null,
-        plainAuthMessage(error.message),
-        "NOT_CONNECTED",
-        "real",
+    let data: { session: Session | null };
+    try {
+      const result = await raceWithTimeout(
+        client.auth.getSession(),
+        SESSION_READ_MS,
+        "Session read timed out",
       );
+      if (result.error) {
+        return notConnected(
+          null,
+          plainAuthMessage(result.error.message),
+          "NOT_CONNECTED",
+          "real",
+        );
+      }
+      data = result.data;
+    } catch {
+      const peeked = this.peekSession();
+      if (peeked) return okReal(peeked, `Session active for ${peeked.email}.`);
+      return {
+        status: "empty",
+        connected: false,
+        message: "No active session. Sign in to continue.",
+        data: null,
+        accountMode: "real",
+        isSimulated: false,
+      };
     }
     if (!data.session?.user) {
       return {
