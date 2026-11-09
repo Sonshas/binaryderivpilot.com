@@ -1,8 +1,5 @@
-import postgres from "npm:postgres@3.4.4";
 import type { AuthUserSource, DepositSource, PublicUserSource } from "./admin-dashboard.ts";
 import { withFreshDb } from "./direct-db.ts";
-
-type Sql = ReturnType<typeof postgres>;
 
 type SqlRow = Record<string, unknown>;
 
@@ -77,34 +74,16 @@ function mapDeposit(row: SqlRow): DepositSource {
   };
 }
 
-function dashboardDbUrl(): string {
-  const raw = Deno.env.get("SUPABASE_DB_URL") ?? "";
-  if (!raw) throw new Error("timeout");
-  if (!/pooler\.supabase\.com/i.test(raw)) return raw;
-  return raw.replace(/(@[^/?]+)(?::\d+)?(?=\/|\?|$)/, (_match, host: string) => {
-    const bare = String(host).replace(/:\d+$/, "");
-    return `${bare}:6543`;
-  });
-}
-
 /**
  * Dashboard reads for /admin and /admin/earnings.
- * One sequential transaction-pooler connection. public.users supplies sign-up time.
+ * Uses withFreshDb so aws-0 / aws-1 pooler hosts rotate when one times out.
  */
 export async function loadAdminDashboardSources(): Promise<{
   authUsers: AuthUserSource[];
   profiles: PublicUserSource[];
   deposits: DepositSource[];
 }> {
-  const sql: Sql = postgres(dashboardDbUrl(), {
-    prepare: false,
-    fetch_types: false,
-    ssl: "require",
-    max: 1,
-    connect_timeout: 8,
-    idle_timeout: 0,
-  });
-  try {
+  return await withFreshDb(async (sql) => {
     const profileRows = await sql<SqlRow[]>`
       select id::text as id, email, role, created_at
         from public.users
@@ -147,13 +126,7 @@ export async function loadAdminDashboardSources(): Promise<{
       profiles,
       deposits: depositRows.map(mapDeposit).filter((row) => row.id && row.user_id),
     };
-  } finally {
-    try {
-      await sql.end({ timeout: 1 });
-    } catch {
-      /* closed */
-    }
-  }
+  }, 12_000);
 }
 
 export type AdminUserListSqlRow = {

@@ -39,6 +39,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
+    // Hard ceiling so AuthLayout never sticks on "Checking your session".
+    const ceiling = globalThis.setTimeout(() => {
+      if (cancelled) return
+      setLoading(false)
+      if (!authService.peekSession()) {
+        setUser(null)
+        setMessage('Sign-in is temporarily unavailable.')
+      }
+    }, 3_500)
     void authService
       .getSession()
       .then((result) => {
@@ -64,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     return () => {
       cancelled = true
+      globalThis.clearTimeout(ceiling)
       unsubscribe()
     }
   }, [])

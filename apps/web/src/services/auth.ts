@@ -42,6 +42,7 @@ import { reportBackendIssue } from "@/services/system-issues";
 import { accountEnabled } from "@/lib/account-access";
 import { roleWithAdminList } from "@/lib/admin-emails";
 import {
+  dataApiFetch,
   getSupabase,
   isSupabaseConfigured,
   peekStoredAuthUser,
@@ -57,6 +58,8 @@ import type {
 import { demoAccountShort } from "@/lib/branding";
 
 const SESSION_READ_MS = 2_500;
+const SIGN_IN_MS = 9_000;
+const PHONE_LOOKUP_MS = 2_500;
 
 export const e2eAuthBypassEnabled =
   import.meta.env.DEV && import.meta.env.VITE_E2E_AUTH_BYPASS === "true";
@@ -427,11 +430,122 @@ async function phoneTakenOnServer(
 async function emailForPhone(phone: string): Promise<string | null> {
   const client = getSupabase();
   if (!client || typeof client.rpc !== "function") return null;
-  const { data, error } = await client.rpc("email_for_phone", {
-    p_phone: phone,
-  });
-  if (error || typeof data !== "string" || !data.includes("@")) return null;
-  return normalizeEmail(data);
+  try {
+    const { data, error } = await raceWithTimeout(
+      Promise.resolve(
+        client.rpc("email_for_phone", {
+          p_phone: phone,
+        }),
+      ),
+      PHONE_LOOKUP_MS,
+      "Phone lookup timed out",
+    );
+    if (error || typeof data !== "string" || !data.includes("@")) return null;
+    return normalizeEmail(data);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Direct password grant bypasses GoTrueClient's navigator lock. When Auth is
+ * slow, signInWithPassword can wait forever behind a hung getSession/refresh.
+ */
+async function passwordGrantDirect(
+  email: string,
+  password: string,
+): Promise<{ session: Session; user: AuthUser } | { error: string }> {
+  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || "";
+  const publishableKey =
+    (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || "";
+  const anonKey =
+    (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || "";
+  const supabaseKey =
+    (anonKey.startsWith("eyJ") ? anonKey : "") || publishableKey || anonKey;
+  if (!supabaseUrl || !supabaseKey) {
+    return { error: "Sign-in is temporarily unavailable." };
+  }
+  let response: Response;
+  try {
+    response = await raceWithTimeout(
+      dataApiFetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      }),
+      SIGN_IN_MS,
+      "Sign-in timed out",
+    );
+  } catch {
+    return { error: "Sign-in is taking too long. Please try again." };
+  }
+  let body: {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    expires_at?: number;
+    token_type?: string;
+    user?: AuthUser;
+    msg?: string;
+    error_description?: string;
+    error?: string;
+  };
+  try {
+    body = (await response.json()) as typeof body;
+  } catch {
+    return { error: "Sign-in is temporarily unavailable." };
+  }
+  if (!response.ok || !body.access_token || !body.refresh_token || !body.user) {
+    return {
+      error:
+        body.error_description ||
+        body.msg ||
+        body.error ||
+        "Email, phone, or password is incorrect.",
+    };
+  }
+  const expiresAt =
+    typeof body.expires_at === "number"
+      ? body.expires_at
+      : Math.floor(Date.now() / 1000) + (Number(body.expires_in) || 3600);
+  const session = {
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+    expires_in: Number(body.expires_in) || 3600,
+    expires_at: expiresAt,
+    token_type: body.token_type ?? "bearer",
+    user: body.user,
+  } as Session;
+  return { session, user: body.user };
+}
+
+/** Persist tokens when setSession hangs behind the Auth lock. */
+function persistGrantedSession(session: Session): void {
+  const supabaseUrl =
+    (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || "";
+  if (!supabaseUrl) return;
+  try {
+    const host = new URL(supabaseUrl).hostname;
+    const ref = host.split(".")[0];
+    if (!ref) return;
+    localStorage.setItem(
+      `sb-${ref}-auth-token`,
+      JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: session.expires_at,
+        expires_in: session.expires_in,
+        token_type: session.token_type,
+        user: session.user,
+      }),
+    );
+  } catch {
+    /* private mode / storage blocked */
+  }
 }
 
 export const authService = {
@@ -491,24 +605,64 @@ export const authService = {
         "real",
       );
     }
-    const { data, error } = await client.auth.signInWithPassword({
-      email,
-      password: input.password,
-    });
-    if (error) {
-      return notConnected(
-        null,
-        "Email, phone, or password is incorrect.",
-        "VALIDATION",
-        "real",
-      );
+    // Prefer a direct password grant so a hung GoTrueClient lock cannot freeze login.
+    const granted = await passwordGrantDirect(email, input.password);
+    if (!("error" in granted)) {
+      // Write local storage first so RequireAuth/peekSession never wait on Auth locks.
+      persistGrantedSession(granted.session);
+      try {
+        await raceWithTimeout(
+          client.auth.setSession({
+            access_token: granted.session.access_token,
+            refresh_token: granted.session.refresh_token,
+          }),
+          3_000,
+          "Session write timed out",
+        );
+      } catch {
+        /* already persisted above */
+      }
+      const authUser = granted.user;
+      const user = userFromAuthOnly(authUser);
+      void hydrateUser(authUser);
+      return okReal(user, `Signed in as ${user.email ?? email}.`);
     }
-    // Return immediately from Auth — profile hydrate continues via onAuthStateChange.
-    // Waiting on the users-table round-trip here made login feel stuck when PostgREST hangs.
-    const authUser = data.session?.user;
-    const user = authUser ? userFromAuthOnly(authUser) : null;
-    if (authUser) void hydrateUser(authUser);
-    return okReal(user, `Signed in as ${user?.email ?? email}.`);
+
+    const directMessage = granted.error;
+    const directTimedOut = /timed out|taking too long|unavailable/i.test(directMessage);
+    // Fall back to the SDK path for unit mocks / missing browser env keys.
+    try {
+      const { data, error } = await raceWithTimeout(
+        client.auth.signInWithPassword({
+          email,
+          password: input.password,
+        }),
+        SIGN_IN_MS,
+        "Sign-in timed out",
+      );
+      if (!error && data.session?.user) {
+        const authUser = data.session.user;
+        const user = userFromAuthOnly(authUser);
+        void hydrateUser(authUser);
+        return okReal(user, `Signed in as ${user.email ?? email}.`);
+      }
+      if (error && !directTimedOut) {
+        return notConnected(
+          null,
+          "Email, phone, or password is incorrect.",
+          "VALIDATION",
+          "real",
+        );
+      }
+    } catch {
+      /* use direct-path message below */
+    }
+    return notConnected(
+      null,
+      directTimedOut ? directMessage : "Email, phone, or password is incorrect.",
+      directTimedOut ? "NOT_CONNECTED" : "VALIDATION",
+      "real",
+    );
   },
 
   async signUp(input: {
@@ -593,10 +747,15 @@ export const authService = {
       );
     }
     const email = input.email.trim();
+    const emailRedirectTo =
+      typeof window !== "undefined"
+        ? confirmEmailRedirectUrl(window.location.origin)
+        : undefined;
     const { data, error } = await client.auth.signUp({
       email,
       password: input.password,
       options: {
+        emailRedirectTo,
         data: {
           name: input.name.trim(),
           phone: normalizePhone(input.phone ?? "") || undefined,

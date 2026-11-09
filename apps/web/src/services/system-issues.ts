@@ -7,6 +7,7 @@ import {
 } from "@/lib/error-log";
 import { demoAccountShort, realAccountShort } from "@/lib/branding";
 import { safeUserMessage } from "@/lib/safe-user-message";
+import { abortSignalAfter, raceWithTimeout } from "@/lib/abort-timeout";
 import { getSupabase } from "@/lib/supabase";
 
 const FUNCTION = "system-issues";
@@ -267,12 +268,23 @@ export const systemIssuesService = {
   async load(): Promise<Result<SystemHealth>> {
     const client = getSupabase();
     if (client) {
-      const { data, error } = await client.functions.invoke<
-        Record<string, unknown>
-      >(FUNCTION, {
-        method: "POST",
-        body: { action: "overview" },
-      });
+      let data: Record<string, unknown> | null = null;
+      let error: unknown = null;
+      try {
+        const invoked = await raceWithTimeout(
+          client.functions.invoke<Record<string, unknown>>(FUNCTION, {
+            method: "POST",
+            body: { action: "overview" },
+            signal: abortSignalAfter(3_000),
+          }),
+          3_000,
+          "System health timed out",
+        );
+        data = invoked.data;
+        error = invoked.error;
+      } catch {
+        return { ok: true, data: localHealth() };
+      }
       const status = (error as { context?: Response } | null)?.context?.status;
       if (status === 401 || status === 403)
         return { ok: false, error: await adminError(error) };

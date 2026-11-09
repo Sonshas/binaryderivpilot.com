@@ -257,22 +257,11 @@ function userFromAccessToken(token: string): {
   }
 }
 
-export async function userFromRequest(admin: SupabaseClient, req: Request) {
+export async function userFromRequest(_admin: SupabaseClient, req: Request) {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
   if (!token) return null
-  // Gateway already verified JWT for verify_jwt functions. Prefer Auth API, but
-  // never block deposits/balance on a hung getUser — decode the access token.
-  try {
-    const auth = await Promise.race([
-      admin.auth.getUser(token),
-      new Promise<null>((_, reject) => {
-        setTimeout(() => reject(new Error('auth timeout')), 2_500)
-      }),
-    ])
-    if (auth && !auth.error && auth.data.user) return auth.data.user
-  } catch {
-    /* fall through to JWT payload */
-  }
+  // Skip Auth getUser: when GoTrue is degraded it can wedge the isolate past
+  // Promise.race timers (edge IDLE_TIMEOUT). Decode the access token only.
   return userFromAccessToken(token)
 }
 

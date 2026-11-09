@@ -18,9 +18,14 @@ export function useSuperadmin(): SuperadminState {
     }
     let cancelled = false
     setState('checking')
-    void adminPanelService.isSuperadmin().then((yes) => {
-      if (!cancelled) setState(yes ? 'yes' : 'no')
-    })
+    void adminPanelService.isSuperadmin().then(
+      (yes) => {
+        if (!cancelled) setState(yes ? 'yes' : 'no')
+      },
+      () => {
+        if (!cancelled) setState('no')
+      },
+    )
     return () => {
       cancelled = true
     }

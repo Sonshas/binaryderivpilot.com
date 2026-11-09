@@ -1,5 +1,6 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { PeriodSeries, PeriodSummary } from '@/domain/admin-panel'
+import { abortSignalAfter, raceWithTimeout } from '@/lib/abort-timeout'
 import { getSupabase } from '@/lib/supabase'
 import type { Result } from '@/services/megapay'
 
@@ -208,10 +209,18 @@ export const adminPanelService = {
   async isSuperadmin(): Promise<boolean> {
     const client = getSupabase()
     if (!client) return false
-    const { data: session } = await client.auth.getSession()
-    if (!session.session) return false
-    const { data, error } = await client.rpc('is_superadmin')
-    return !error && data === true
+    try {
+      const { data: session } = await client.auth.getSession()
+      if (!session.session) return false
+      const { data, error } = await raceWithTimeout(
+        Promise.resolve(client.rpc('is_superadmin').abortSignal(abortSignalAfter(3_000))),
+        3_000,
+        'timeout',
+      )
+      return !error && data === true
+    } catch {
+      return false
+    }
   },
 
   async overview(): Promise<Result<AdminPanelOverview>> {

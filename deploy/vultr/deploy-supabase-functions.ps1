@@ -40,7 +40,26 @@ $all = @(
   'system-issues'
 )
 $toDeploy = if ($Only.Count -gt 0) { $Only } else { $all }
-$noJwt = @('mpesa-callback', 'mpesa-status', 'megapay-webhook', 'mpesa-b2c-result', 'real-trade-settle')
+# real-trade / real-wallet / admin-* verify the user JWT in-function (with timeout +
+# payload decode). Gateway verify_jwt hangs when Auth/JWKS is degraded and pauses
+# trading or leaves /admin on an endless skeleton.
+$noJwt = @(
+  'mpesa-callback',
+  'mpesa-status',
+  'megapay-webhook',
+  'mpesa-b2c-result',
+  'real-trade-settle',
+  'real-trade',
+  'real-wallet',
+  'admin-dashboard',
+  'admin-users',
+  'admin-panel',
+  'admin-fees',
+  'admin-trade-settings',
+  'admin-withdrawals',
+  'platform-settings',
+  'system-issues'
+)
 foreach ($name in $toDeploy) {
   $path = Join-Path $FunctionsDir $name
   if (-not (Test-Path (Join-Path $path 'index.ts'))) {

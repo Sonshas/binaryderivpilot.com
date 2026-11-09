@@ -45,12 +45,18 @@ export function LoginForm() {
     setLoading(true)
     setOk(false)
     setMessage(null)
-    const result = await authService.signIn({ email, password })
-    setMessage(result.message)
-    setOk(result.connected && Boolean(result.data))
-    setLoading(false)
-    if (result.connected && result.data) {
-      navigate(resolvePostAuthPath(location.search, location.state), { replace: true })
+    try {
+      const result = await authService.signIn({ email, password })
+      setMessage(result.message)
+      setOk(result.connected && Boolean(result.data))
+      if (result.connected && result.data) {
+        navigate(resolvePostAuthPath(location.search, location.state), { replace: true })
+      }
+    } catch {
+      setOk(false)
+      setMessage('Sign-in is taking too long. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 

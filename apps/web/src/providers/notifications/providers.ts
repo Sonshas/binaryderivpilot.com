@@ -2,6 +2,7 @@ import { DEMO_ACCOUNT_ID, DEMO_USER_ID } from "@/domain/account";
 import { createId, nowIso } from "@/lib/ids";
 import { loadDemoState, mutateDemoState } from "@/lib/demo-store";
 import { reportBackendIssue } from "@/services/system-issues";
+import { abortSignalAfter } from "@/lib/abort-timeout";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { REAL_INTEGRATION } from "@/providers/config";
 import { okDemo, okReal, notConnected } from "@/providers/results";
@@ -90,7 +91,9 @@ export const realNotificationProvider: NotificationProvider = {
       )
       .eq("user_id", session.user.id)
       .eq("is_simulated", false)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .abortSignal(abortSignalAfter(3_000));
 
     if (error) {
       reportBackendIssue("notifications", "notifications.read", error);

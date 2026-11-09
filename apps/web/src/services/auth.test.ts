@@ -20,6 +20,46 @@ const redirects = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase', () => ({
   isSupabaseConfigured: true,
+  peekStoredAuthUser: () =>
+    memory.session?.user
+      ? {
+          id: memory.session.user.id,
+          email: memory.session.user.email,
+          created_at: memory.session.user.created_at,
+          user_metadata: memory.session.user.user_metadata,
+        }
+      : null,
+  async dataApiFetch(input: RequestInfo | URL, init?: RequestInit) {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+    if (url.includes('/auth/v1/token?grant_type=password')) {
+      const body = JSON.parse(String(init?.body ?? '{}')) as { email?: string; password?: string }
+      const stored = body.email ? memory.users.get(body.email) : null
+      if (!stored || stored.password !== body.password) {
+        return new Response(JSON.stringify({ error: 'invalid_grant', error_description: 'Invalid login credentials' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      const user = {
+        id: stored.id,
+        email: stored.email,
+        created_at: stored.created_at,
+        user_metadata: { name: stored.name },
+      }
+      memory.session = { user }
+      return new Response(
+        JSON.stringify({
+          access_token: 'test-access',
+          refresh_token: 'test-refresh',
+          expires_in: 3600,
+          token_type: 'bearer',
+          user,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+    return new Response(JSON.stringify({ message: 'not mocked' }), { status: 404 })
+  },
   getSupabase: () => ({
     auth: {
       async signUp({
@@ -56,6 +96,9 @@ vi.mock('@/lib/supabase', () => ({
         }
         memory.session = { user }
         return { data: { session: memory.session, user }, error: null }
+      },
+      async setSession() {
+        return { data: { session: memory.session }, error: null }
       },
       async signOut() {
         memory.session = null

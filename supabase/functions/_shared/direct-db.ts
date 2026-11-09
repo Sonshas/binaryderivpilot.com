@@ -14,9 +14,9 @@ let poolUrl = "";
 // Newer eu-west-1 projects land on aws-0; older ones used aws-1.
 const POOLER_HOSTS = [
   (Deno.env.get("SUPABASE_POOLER_HOST") ?? "").trim(),
-  // Prefer aws-1: aws-0 transaction pooler has been timing out from Edge.
-  "aws-1-eu-west-1.pooler.supabase.com",
+  // Prefer aws-0: aws-1 returns ENOTFOUND for this project's pooler tenant.
   "aws-0-eu-west-1.pooler.supabase.com",
+  "aws-1-eu-west-1.pooler.supabase.com",
 ].filter(Boolean);
 
 function rewriteToPooler(raw: string, host: string, port: number): string | null {
@@ -50,8 +50,8 @@ function databaseUrlCandidates(): string[] {
   if (/pooler\.supabase\.com/i.test(raw)) {
     const hosts = [
       ...POOLER_HOSTS,
-      "aws-1-eu-west-1.pooler.supabase.com",
       "aws-0-eu-west-1.pooler.supabase.com",
+      "aws-1-eu-west-1.pooler.supabase.com",
     ].filter(Boolean);
     for (const host of hosts) {
       const onHost = swapPoolerHost(raw, host);
@@ -79,7 +79,7 @@ function sqlOpts() {
     fetch_types: false,
     ssl: "require" as const,
     max: 1,
-    connect_timeout: 5,
+    connect_timeout: 2,
     idle_timeout: 0,
   };
 }
@@ -140,8 +140,12 @@ export async function withFreshDb<T>(
   timeoutMs = 8000,
 ): Promise<T> {
   const urls = databaseUrlCandidates();
+  // Try the preferred pooler host, then one fallback — enough to survive
+  // aws-0/aws-1 tenant routing without burning the whole request budget.
+  const maxAttempts = Math.min(urls.length, 2);
+  const perAttempt = Math.max(500, Math.min(timeoutMs, 3_000));
   let last: unknown = null;
-  for (let attempt = 0; attempt < urls.length; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const sql = openDirectSql(urls[attempt]);
     let timer: number | undefined;
     const query = run(sql);
@@ -149,7 +153,7 @@ export async function withFreshDb<T>(
       const value = await Promise.race([
         query,
         new Promise<T>((_, reject) => {
-          timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+          timer = setTimeout(() => reject(new Error("timeout")), perAttempt);
         }),
       ]);
       // Prefer a working URL for later shared-pool calls in this isolate.
@@ -163,7 +167,7 @@ export async function withFreshDb<T>(
       query.catch(() => {
         /* the timed-out read is closed with the client */
       });
-      if (!isClosedConnection(err) && !isTimeout(err) && attempt === urls.length - 1) {
+      if (!isClosedConnection(err) && !isTimeout(err) && attempt === maxAttempts - 1) {
         break;
       }
     } finally {
@@ -183,13 +187,16 @@ export async function runDirect<T>(
   run: (sql: Sql) => Promise<T>,
   timeoutMs = 5000,
 ): Promise<T> {
+  // Keep the whole direct path inside the caller's budget. Cascading pooler
+  // hosts used to burn 30–60s and trip edge IDLE_TIMEOUT / client aborts.
+  const budget = Math.max(500, Math.min(timeoutMs, 8_000));
   try {
-    return await withDirectDb(run, timeoutMs);
+    return await withDirectDb(run, budget);
   } catch (first) {
     if (!isClosedConnection(first) && !isTimeout(first)) {
       /* still try a fresh socket; the shared pool may be stale */
     }
-    return await withFreshDb(run, timeoutMs);
+    return await withFreshDb(run, Math.min(budget, 3_000));
   }
 }
 
