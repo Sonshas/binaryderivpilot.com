@@ -9,6 +9,7 @@ import {
   type MegapayAccountId,
   type MegapayAccountPublic,
 } from '../_shared/payments/megapay-accounts.ts'
+import { paymentEnv } from '../_shared/edge-env.ts'
 import { adminClient, corsHeaders, json, logEdgeError, loadPaymentSettingsMap, userFromRequest } from '../_shared/server.ts'
 
 const WITHDRAW_STEPS = ['verification', 'scanner', 'tax'] as const
@@ -141,7 +142,7 @@ async function saveMegapayAccounts(
   admin: SupabaseClient,
   patch: Partial<Record<MegapayAccountId, boolean>>,
 ): Promise<MegapayAccountPublic[]> {
-  const env = Deno.env.toObject()
+  const env = paymentEnv()
   const accounts = parseMegapayAccounts(env)
   const map = await loadPaymentSettingsMap(admin)
   const now = new Date().toISOString()
@@ -202,7 +203,7 @@ Deno.serve(async (req) => {
 
   try {
     const map = await loadPaymentSettingsMap(admin)
-    const env = Deno.env.toObject()
+    const env = paymentEnv()
 
     if (req.method === 'GET') {
       const withdraw = withdrawFromMap(map)

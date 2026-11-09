@@ -1,12 +1,12 @@
 import { TRADE_DURATIONS } from '@/domain/digit-contracts'
 import type { Bot, Market, Timeframe } from '@/types'
 
-export const APP_NAME = 'SmartBaseBinary'
+export const APP_NAME = 'binaryderivpilot'
 
 export const NOT_CONNECTED = 'This is unavailable right now. Try again in a moment.'
 
 export const RISK_DISCLAIMER =
-  'Binary contracts involve a high risk of losing the stake you place. Past or historical results, if shown later, are not a guarantee of future outcomes. SmartBaseBinary does not promise profits, win rates, or payout percentages. Never trade money you cannot afford to lose.'
+  'Binary contracts involve a high risk of losing the stake you place. Past or historical results, if shown later, are not a guarantee of future outcomes. binaryderivpilot does not promise profits, win rates, or payout percentages. Never trade money you cannot afford to lose.'
 
 export const TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
 
@@ -126,6 +126,7 @@ export const STAKE_PRESETS = [1, 5, 10, 25, 50, 100] as const
 
 export const ADMIN_NAV = [
   { to: '/admin', label: 'Dashboard', end: true },
+  { to: '/admin/earnings', label: 'Earnings' },
   { to: '/admin/users', label: 'Users' },
   { to: '/admin/verification', label: 'Verification' },
   { to: '/admin/support', label: 'Support' },

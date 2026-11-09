@@ -113,7 +113,7 @@ const startSteps = [
 
 const faqs = [
   {
-    q: "Are the prices on SmartBaseBinary real?",
+    q: "Are the prices on binaryderivpilot real?",
     a: "Yes. Charts, the ticker, and digit statistics use live market prices. If prices are unavailable we show that clearly instead of inventing numbers.",
   },
   {
@@ -163,7 +163,7 @@ export function LandingPage() {
         layout="wide"
         body={
           <p>
-            Every price, chart and digit on SmartBaseBinary comes from live
+            Every price, chart and digit on binaryderivpilot comes from live
             market data. {demoAccountShort()} and {realAccountShort()} use the
             same prices, so what you practise on matches what the market is
             doing.

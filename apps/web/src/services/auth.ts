@@ -18,6 +18,7 @@ import {
   syncWithdrawGatesClearedFromServer,
 } from "@/lib/external-payments";
 import { platformSettingsService } from "@/services/platform-settings";
+import { abortSignalAfter, raceWithTimeout } from "@/lib/abort-timeout";
 import { isValidEmail } from "@/lib/format";
 import { normalizeEmail, normalizePhone, parseLoginId } from "@/lib/identity";
 import { rekeyKycEmail } from "@/lib/kyc";
@@ -204,32 +205,48 @@ function userFromPublicRow(row: PublicUserRow, fallbackEmail: string): User {
   };
 }
 
+const PROFILE_HYDRATE_MS = 4_000;
+
 async function hydrateUser(authUser: AuthUser): Promise<User> {
   const client = getSupabase();
   if (!client) return userFromAuthOnly(authUser);
 
-  const { data, error } = await client
-    .from("users")
-    .select(
-      "id, email, name, role, account_status, kyc_status, created_at, updated_at, withdraw_verification_enabled, withdraw_scanner_enabled, withdraw_tax_enabled, withdraw_gates_cleared, is_vip",
-    )
-    .eq("id", authUser.id)
-    .maybeSingle();
+  try {
+    const { data, error } = await raceWithTimeout(
+      Promise.resolve(
+        client
+          .from("users")
+          .select(
+            "id, email, name, role, account_status, kyc_status, created_at, updated_at, withdraw_verification_enabled, withdraw_scanner_enabled, withdraw_tax_enabled, withdraw_gates_cleared, is_vip",
+          )
+          .eq("id", authUser.id)
+          .abortSignal(abortSignalAfter(PROFILE_HYDRATE_MS))
+          .maybeSingle(),
+      ),
+      PROFILE_HYDRATE_MS,
+      "Profile hydrate timed out",
+    );
 
-  if (error) reportBackendIssue("auth", "users.profile", error);
-  if (error || !data) {
+    if (error) reportBackendIssue("auth", "users.profile", error);
+    if (error || !data) {
+      return userFromAuthOnly(authUser);
+    }
+    const row = data as PublicUserRow;
+    const mapped = userFromPublicRow(row, authUser.email ?? "");
+    syncUserWithdrawStepsFromServer(mapped.email, {
+      verification: row.withdraw_verification_enabled,
+      scanner: row.withdraw_scanner_enabled,
+      tax: row.withdraw_tax_enabled,
+    });
+    syncWithdrawGatesClearedFromServer(
+      mapped.email,
+      row.withdraw_gates_cleared === true,
+    );
+    void platformSettingsService.load(mapped.email);
+    return mapped;
+  } catch {
     return userFromAuthOnly(authUser);
   }
-  const row = data as PublicUserRow;
-  const mapped = userFromPublicRow(row, authUser.email ?? "");
-  syncUserWithdrawStepsFromServer(mapped.email, {
-    verification: row.withdraw_verification_enabled,
-    scanner: row.withdraw_scanner_enabled,
-    tax: row.withdraw_tax_enabled,
-  });
-  syncWithdrawGatesClearedFromServer(mapped.email, row.withdraw_gates_cleared === true);
-  void platformSettingsService.load(mapped.email);
-  return mapped;
 }
 
 async function resolveSessionUser(
@@ -480,16 +497,11 @@ export const authService = {
         "real",
       );
     }
-    const user = await resolveSessionUser(data.session);
-    if (user?.accountStatus === "suspended") {
-      await client.auth.signOut();
-      return notConnected(
-        null,
-        "This account is disabled. Contact support for assistance.",
-        "VALIDATION",
-        "real",
-      );
-    }
+    // Return immediately from Auth — profile hydrate continues via onAuthStateChange.
+    // Waiting on the users-table round-trip here made login feel stuck when PostgREST hangs.
+    const authUser = data.session?.user;
+    const user = authUser ? userFromAuthOnly(authUser) : null;
+    if (authUser) void hydrateUser(authUser);
     return okReal(user, `Signed in as ${user?.email ?? email}.`);
   },
 
@@ -812,8 +824,7 @@ export const authService = {
         "real",
       );
     }
-    const user = await resolveSessionUser(data.session);
-    if (!user) {
+    if (!data.session?.user) {
       return {
         status: "empty",
         connected: false,
@@ -823,7 +834,9 @@ export const authService = {
         isSimulated: false,
       };
     }
-    return okReal(user, `Session active for ${user.email}.`);
+    const authOnly = userFromAuthOnly(data.session.user);
+    void hydrateUser(data.session.user);
+    return okReal(authOnly, `Session active for ${authOnly.email}.`);
   },
 
   async signOut(): Promise<ProviderResult<null>> {
@@ -983,7 +996,13 @@ export const authService = {
       return () => undefined;
     }
     const { data } = client.auth.onAuthStateChange((_event, session) => {
-      void resolveSessionUser(session).then(callback);
+      if (!session?.user) {
+        callback(null);
+        return;
+      }
+      // Emit auth-only immediately so login never waits on a hung users-table read.
+      callback(userFromAuthOnly(session.user));
+      void hydrateUser(session.user).then(callback);
     });
     return () => data.subscription.unsubscribe();
   },

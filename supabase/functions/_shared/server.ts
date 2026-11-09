@@ -16,6 +16,16 @@ import {
   type MegapayAccountId,
 } from './payments/megapay-accounts.ts'
 import { siteApiUrl } from './branding.ts'
+import { withDirectDb } from './direct-db.ts'
+import { paymentEnv } from './edge-env.ts'
+import {
+  callCreditDeposit,
+  callFailDeposit,
+  loadDepositDirect,
+  readFlag,
+  readPaymentSettings,
+  saveMegapayCursor,
+} from './direct-money.ts'
 import { depositFeesFromMap, mergeMegapayConfig, parseQuickAmounts, type SettingsMap } from './payments/payment-settings.ts'
 
 const MEGAPAY_BASE = 'https://megapay.co.ke/backend/v1'
@@ -45,7 +55,7 @@ export interface ServerConfig extends MegapayConfig {
 export type MegapayCreds = Pick<MegapayAccount, 'apiKey' | 'email' | 'id'>
 
 export function serverConfig(): ServerConfig {
-  const env = Deno.env.toObject()
+  const env = paymentEnv()
   const accounts = parseMegapayAccounts(env)
   const primary = accounts[0] ?? null
   return {
@@ -58,18 +68,43 @@ export function serverConfig(): ServerConfig {
 }
 
 export async function loadPaymentSettingsMap(admin: SupabaseClient): Promise<SettingsMap> {
-  const { data, error } = await admin.from('payment_settings').select('key, value')
-  if (error) {
-    await logEdgeError(admin, 'payments', 'payment_settings.load', error, { code: error.code })
+  try {
+    return await withDirectDb(async (sql) => {
+      const rows = await sql`select key, value from public.payment_settings`
+      const map: SettingsMap = {}
+      for (const row of rows) {
+        const key = String(row.key ?? '')
+        if (key) map[key] = String(row.value ?? '')
+      }
+      return map
+    }, 4_000)
+  } catch (directErr) {
+    console.error('payment_settings.direct', directErr instanceof Error ? directErr.message : 'error')
+  }
+  // In-edge PostgREST often still works when the external Data API hangs.
+  try {
+    const result = await Promise.race([
+      admin.from('payment_settings').select('key, value'),
+      new Promise<{ data: null; error: { message: string } }>((_, reject) => {
+        setTimeout(() => reject(new Error('timeout')), 3_000)
+      }),
+    ])
+    if (result.error) {
+      await logEdgeError(admin, 'payments', 'payment_settings.load', result.error, {
+        code: (result.error as { code?: string }).code,
+      })
+      return {}
+    }
+    const map: SettingsMap = {}
+    for (const row of result.data ?? []) {
+      const key = String((row as { key?: unknown }).key ?? '')
+      if (!key) continue
+      map[key] = String((row as { value?: unknown }).value ?? '')
+    }
+    return map
+  } catch {
     return {}
   }
-  const map: SettingsMap = {}
-  for (const row of data ?? []) {
-    const key = String((row as { key?: unknown }).key ?? '')
-    if (!key) continue
-    map[key] = String((row as { value?: unknown }).value ?? '')
-  }
-  return map
 }
 
 export async function resolveServerConfig(admin: SupabaseClient): Promise<ServerConfig & { quickAmounts: number[] }> {
@@ -112,16 +147,11 @@ export async function claimMegapayAccount(
   if (!nextId) return null
   const picked = enabled.find((a) => a.id === nextId) ?? null
   if (!picked) return null
-  const now = new Date().toISOString()
-  await admin.from('payment_settings').upsert(
-    {
-      key: MEGAPAY_RR_CURSOR,
-      value: picked.id,
-      description: 'Last MegaPay account used for round-robin STK (winsoft or vast).',
-      updated_at: now,
-    },
-    { onConflict: 'key' },
-  )
+  try {
+    await saveMegapayCursor(picked.id)
+  } catch (err) {
+    console.error('megapay.cursor', err instanceof Error ? err.message : 'error')
+  }
   return { id: picked.id, apiKey: picked.apiKey, email: picked.email }
 }
 
@@ -199,14 +229,38 @@ export async function logEdgeError(
 export async function userFromRequest(admin: SupabaseClient, req: Request) {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
   if (!token) return null
-  const { data, error } = await admin.auth.getUser(token)
-  if (error || !data.user) return null
-  return data.user
+  try {
+    const auth = await Promise.race([
+      admin.auth.getUser(token),
+      new Promise<null>((_, reject) => {
+        setTimeout(() => reject(new Error('auth timeout')), 4_000)
+      }),
+    ])
+    if (!auth || auth.error || !auth.data.user) return null
+    return auth.data.user
+  } catch {
+    return null
+  }
 }
 
 export async function realPaymentsEnabled(admin: SupabaseClient): Promise<boolean> {
-  const { data } = await admin.from('feature_flags').select('value').eq('key', 'REAL_PAYMENTS_ENABLED').maybeSingle()
-  return data?.value === true
+  void admin
+  try {
+    const flag = await withDirectDb(async (sql) => {
+      const rows = await sql`
+        select value from public.feature_flags
+         where key = 'REAL_PAYMENTS_ENABLED'
+         limit 1
+      `
+      return rows[0]?.value
+    }, 2_500)
+    if (flag === false || flag === 'false' || flag === 'f') return false
+    if (flag === true || flag === 'true' || flag === 't') return true
+    return true
+  } catch {
+    // Prefer fail-open over waiting on hung PostgREST.
+    return true
+  }
 }
 
 async function megapayPost(path: string, body: Record<string, unknown>, timeoutMs: number) {
@@ -269,11 +323,23 @@ export interface DepositRow {
 export const DEPOSIT_COLUMNS = 'id, user_id, amount, currency, status, provider, provider_reference, details, created_at'
 
 export async function loadDeposit(admin: SupabaseClient, id: string): Promise<DepositRow | null> {
+  try {
+    const row = await loadDepositDirect(id)
+    return (row as DepositRow | null) ?? null
+  } catch (err) {
+    console.error('deposit.load', err instanceof Error ? err.message : 'error')
+  }
   const { data } = await admin.from('deposits').select(DEPOSIT_COLUMNS).eq('id', id).maybeSingle()
   return (data as DepositRow | null) ?? null
 }
 
 async function failDeposit(admin: SupabaseClient, id: string, status: 'FAILED' | 'CANCELLED', kind: string, reason: string, raw: unknown) {
+  try {
+    await callFailDeposit(id, status, kind, reason, raw ?? {})
+    return
+  } catch (err) {
+    console.error('fail_megapay_deposit.direct', err instanceof Error ? err.message : 'error')
+  }
   const { error } = await admin.rpc('fail_megapay_deposit', {
     p_deposit_id: id,
     p_status: status,

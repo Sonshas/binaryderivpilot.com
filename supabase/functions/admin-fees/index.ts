@@ -12,6 +12,7 @@ import {
   type TradingFeeSettings,
   type WithdrawalFeeSettings,
 } from '../_shared/payment-settings.ts'
+import { paymentEnv } from '../_shared/edge-env.ts'
 import { adminClient, corsHeaders, json, logEdgeError, userFromRequest } from '../_shared/server.ts'
 import { parseMegapayConfig } from '../_shared/megapay.ts'
 import { parseWithdrawalConfig } from '../_shared/withdrawals.ts'
@@ -37,7 +38,7 @@ async function loadTextMap(admin: SupabaseClient, table: 'payment_settings' | 't
 }
 
 async function loadHost(admin: SupabaseClient): Promise<HostFeeSettings> {
-  const env = Deno.env.toObject()
+  const env = paymentEnv()
   const [payment, trading] = await Promise.all([loadTextMap(admin, 'payment_settings'), loadTextMap(admin, 'trading_settings')])
   return hostFeesFromMaps(payment, trading, {
     deposit: parseMegapayConfig(env),

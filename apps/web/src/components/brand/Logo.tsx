@@ -35,14 +35,14 @@ export function Logo({
   return (
     <Link to={to} className={cn('inline-flex items-center gap-2.5 text-paper no-underline', className)}>
       <Mark />
-      {compact ? (
-        <span className="font-display text-sm font-bold tracking-tight">SBB</span>
-      ) : (
-        <span className="font-display text-[15px] font-bold tracking-tight">
-          SmartBase<span className="sbb-gradient-text">Binary</span>
-        </span>
-      )}
-      <span className="sr-only">{APP_NAME}</span>
+      <span
+        className={cn(
+          'font-display font-bold tracking-tight',
+          compact ? 'text-xs sm:text-sm' : 'text-[15px]',
+        )}
+      >
+        {APP_NAME}
+      </span>
     </Link>
   )
 }

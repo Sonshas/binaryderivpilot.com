@@ -1,6 +1,7 @@
 import { DEFAULT_DEPOSIT_PROVIDER, parseDepositProvider, type DepositProvider } from '@/domain/daraja'
 import { hydratePayMode, readSavedPayMode } from '@/lib/pay-mode'
 import { parseMegapayConfig } from '@/domain/megapay'
+import { raceWithTimeout } from '@/lib/abort-timeout'
 import { loadDemoSession } from '@/lib/demo-session'
 import { getSupabase } from '@/lib/supabase'
 import { readSavedHostFees } from '@/services/admin-fees'
@@ -22,6 +23,9 @@ export interface DepositConfig extends MegapayDepositConfig {
 export type DepositState = MegapayDepositState
 
 const DARAJA_FUNCTIONS = { start: 'mpesa-deposit', status: 'mpesa-status' } as const
+/** Browser + Edge cold starts regularly exceeded 5s and left the form on "busy". */
+const CONFIG_BUDGET_MS = 12_000
+const CONFIG_BUSY = 'Deposits are busy right now. Please try again.'
 
 export function resolveDepositProvider(raw: unknown): DepositProvider {
   const provider = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).provider : undefined
@@ -30,6 +34,33 @@ export function resolveDepositProvider(raw: unknown): DepositProvider {
 
 export function depositMethodLabel(config: Pick<DepositConfig, 'provider' | 'paybill'>): string {
   return config.provider === 'daraja' && config.paybill ? `M-Pesa (Paybill ${config.paybill})` : 'M-Pesa'
+}
+
+function finiteNumber(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+/** A provider-only body (`{ provider }`) has no enabled flag. Missing enabled is not a pause. */
+export function depositConfigFromPayload(data: Record<string, unknown>, provider: DepositProvider): DepositConfig | null {
+  if (typeof data.enabled !== 'boolean') return null
+  const kesPerUsd = finiteNumber(data.kes_per_usd)
+  const minKes = finiteNumber(data.min_kes)
+  const maxKes = finiteNumber(data.max_kes)
+  if (kesPerUsd == null || minKes == null || maxKes == null) return null
+  const quick = Array.isArray(data.quick_amounts)
+    ? data.quick_amounts.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0)
+    : undefined
+  return {
+    provider,
+    paybill: provider === 'daraja' && typeof data.paybill === 'string' && data.paybill ? data.paybill : null,
+    enabled: data.enabled,
+    kesPerUsd,
+    minKes,
+    maxKes,
+    quickAmounts: quick && quick.length ? quick : undefined,
+    message: typeof data.message === 'string' ? data.message : null,
+  }
 }
 
 function savedDepositConfig(): Result<DepositConfig> | null {
@@ -43,7 +74,7 @@ function savedDepositConfig(): Result<DepositConfig> | null {
   return {
     ok: true,
     data: {
-      provider: readSavedPayMode() ?? 'daraja',
+      provider: readSavedPayMode() ?? 'megapay',
       paybill: null,
       enabled: true,
       kesPerUsd: saved?.kesPerUsd ?? base.kesPerUsd,
@@ -59,43 +90,64 @@ export const depositService = {
   async getConfig(): Promise<Result<DepositConfig>> {
     const client = getSupabase()
     if (!client) return savedDepositConfig() ?? { ok: false, error: UNAVAILABLE }
-    const { data, error } = await client.functions.invoke<Record<string, unknown>>(DARAJA_FUNCTIONS.start, { method: 'GET' })
+
+    // MegaPay is the live rail — load it first so a slow mpesa-deposit probe cannot starve the form.
+    try {
+      const megapay = await raceWithTimeout(megapayService.getConfig(), CONFIG_BUDGET_MS, CONFIG_BUSY)
+      if (megapay.ok) {
+        hydratePayMode('megapay')
+        return { ok: true, data: { ...megapay.data, provider: 'megapay', paybill: null } }
+      }
+    } catch {
+      /* fall through to mpesa-deposit probe / saved config */
+    }
+
+    let data: Record<string, unknown> | null = null
+    let error: unknown = null
+    try {
+      const result = await raceWithTimeout(
+        client.functions.invoke<Record<string, unknown>>(DARAJA_FUNCTIONS.start, { method: 'GET' }),
+        CONFIG_BUDGET_MS,
+        CONFIG_BUSY,
+      )
+      data = result.data
+      error = result.error
+    } catch (err) {
+      return savedDepositConfig() ?? { ok: false, error: err instanceof Error ? err.message : CONFIG_BUSY }
+    }
     if (error || !data) return savedDepositConfig() ?? { ok: false, error: await errorMessage(error) }
 
     const provider = resolveDepositProvider(data)
     hydratePayMode(provider)
-    if (provider === 'megapay') {
-      const fallback = await megapayService.getConfig()
-      return fallback.ok ? { ok: true, data: { ...fallback.data, provider: 'megapay', paybill: null } } : fallback
-    }
-    const quick = Array.isArray(data.quick_amounts)
-      ? data.quick_amounts.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0)
-      : undefined
-    return {
-      ok: true,
-      data: {
-        provider: 'daraja',
-        paybill: typeof data.paybill === 'string' && data.paybill ? data.paybill : null,
-        enabled: data.enabled === true,
-        kesPerUsd: Number(data.kes_per_usd),
-        minKes: Number(data.min_kes),
-        maxKes: Number(data.max_kes),
-        quickAmounts: quick && quick.length ? quick : undefined,
-        message: (data.message as string | null) ?? null,
-      },
-    }
+    const inline = depositConfigFromPayload(data, provider)
+    if (inline) return { ok: true, data: inline }
+    return { ok: false, error: UNAVAILABLE }
   },
 
   async startDeposit(provider: DepositProvider, amountKes: number, phone: string): Promise<Result<DepositState>> {
-    if (provider === 'megapay') return megapayService.startDeposit(amountKes, phone)
+    if (provider === 'megapay') {
+      try {
+        return await raceWithTimeout(megapayService.startDeposit(amountKes, phone), 20_000, CONFIG_BUSY)
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : CONFIG_BUSY }
+      }
+    }
     const client = getSupabase()
     if (!client) return { ok: false, error: UNAVAILABLE }
-    const { data, error } = await client.functions.invoke<Record<string, unknown>>(DARAJA_FUNCTIONS.start, {
-      method: 'POST',
-      body: { amount_kes: amountKes, phone },
-    })
-    if (error || !data) return { ok: false, error: await errorMessage(error) }
-    return { ok: true, data: mapState(data) }
+    try {
+      const { data, error } = await raceWithTimeout(
+        client.functions.invoke<Record<string, unknown>>(DARAJA_FUNCTIONS.start, {
+          method: 'POST',
+          body: { amount_kes: amountKes, phone },
+        }),
+        20_000,
+        CONFIG_BUSY,
+      )
+      if (error || !data) return { ok: false, error: await errorMessage(error) }
+      return { ok: true, data: mapState(data) }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : CONFIG_BUSY }
+    }
   },
 
   async checkStatus(provider: DepositProvider, depositId: string): Promise<Result<DepositState>> {

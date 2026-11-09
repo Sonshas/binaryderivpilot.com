@@ -160,7 +160,7 @@ export function PublicSite({ children }: { children: ReactNode }) {
         </div>
         <div className="border-t border-line">
           <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-mist">
-            © {new Date().getFullYear()} SmartBaseBinary · {siteHost()}. Trading
+            © {new Date().getFullYear()} binaryderivpilot · {siteHost()}. Trading
             involves risk of loss. No guaranteed profits.
           </p>
         </div>

@@ -9,6 +9,7 @@ import {
 } from "../_shared/megapay.ts";
 import { realAccountShort } from "../_shared/branding.ts";
 import { parseDepositProvider } from "../_shared/daraja.ts";
+import { withDirectDb } from "../_shared/direct-db.ts";
 import {
   DEPOSIT_COLUMNS,
   UNAVAILABLE_MESSAGE,
@@ -23,12 +24,62 @@ import {
   publicDeposit,
   realPaymentsEnabled,
   resolveServerConfig,
+  serverConfig,
   userFromRequest,
   type DepositRow,
 } from "../_shared/server.ts";
+import {
+  depositFeesFromMap,
+  mergeMegapayConfig,
+  parseQuickAmounts,
+  type SettingsMap,
+} from "../_shared/payments/payment-settings.ts";
 
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
 const RATE_LIMIT_MAX_PENDING = 3;
+
+/** Avoid PostgREST for the deposit form config probe. */
+async function fastMegapayConfig() {
+  const base = serverConfig();
+  try {
+    return await withDirectDb(async (sql) => {
+      const [settings, flags] = await Promise.all([
+        sql`select key, value from public.payment_settings`,
+        sql`select value from public.feature_flags where key = 'REAL_PAYMENTS_ENABLED' limit 1`,
+      ]);
+      const map: SettingsMap = {};
+      for (const row of settings) {
+        const key = String(row.key ?? "");
+        if (key) map[key] = String(row.value ?? "");
+      }
+      const money = mergeMegapayConfig(base, map);
+      const deposit = depositFeesFromMap(map, base);
+      const flag = flags[0]?.value;
+      const enabled = flag === true || flag === "true" || flag === "t";
+      const provider = parseDepositProvider(
+        map.DEPOSIT_PROVIDER || Deno.env.get("DEPOSIT_PROVIDER"),
+      );
+      return {
+        provider,
+        enabled,
+        kesPerUsd: money.kesPerUsd,
+        minKes: money.minKes,
+        maxKes: money.maxKes,
+        quickAmounts: parseQuickAmounts(deposit.quickAmounts),
+      };
+    }, 4_000);
+  } catch {
+    console.error("megapay-deposit", "config read skipped");
+    return {
+      provider: MEGAPAY_PROVIDER,
+      enabled: true,
+      kesPerUsd: base.kesPerUsd,
+      minKes: base.minKes,
+      maxKes: base.maxKes,
+      quickAmounts: parseQuickAmounts(depositFeesFromMap({}, base).quickAmounts),
+    };
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
@@ -38,6 +89,26 @@ Deno.serve(async (req) => {
   const user = await userFromRequest(admin, req);
   if (!user) return json({ error: "Sign in to deposit." }, 401);
 
+  if (req.method === "GET") {
+    const view = await fastMegapayConfig();
+    const configured = credentialsConfigured(serverConfig());
+    if (view.provider !== MEGAPAY_PROVIDER) {
+      return json({ provider: view.provider });
+    }
+    const ready = view.enabled && configured;
+    return json({
+      enabled: ready,
+      provider: MEGAPAY_PROVIDER,
+      method: "mpesa",
+      currency: "USD",
+      kes_per_usd: view.kesPerUsd,
+      min_kes: view.minKes,
+      max_kes: view.maxKes,
+      quick_amounts: view.quickAmounts,
+      message: ready ? null : UNAVAILABLE_MESSAGE,
+    });
+  }
+
   const cfg = await resolveServerConfig(admin);
   const enabled = await realPaymentsEnabled(admin);
   const configured = credentialsConfigured(cfg);
@@ -46,22 +117,6 @@ Deno.serve(async (req) => {
     settings.DEPOSIT_PROVIDER || Deno.env.get("DEPOSIT_PROVIDER"),
   );
 
-  if (req.method === "GET") {
-    if (activeProvider !== MEGAPAY_PROVIDER) {
-      return json({ provider: activeProvider });
-    }
-    return json({
-      enabled: enabled && configured,
-      provider: MEGAPAY_PROVIDER,
-      method: "mpesa",
-      currency: "USD",
-      kes_per_usd: cfg.kesPerUsd,
-      min_kes: cfg.minKes,
-      max_kes: cfg.maxKes,
-      quick_amounts: cfg.quickAmounts,
-      message: enabled && configured ? null : UNAVAILABLE_MESSAGE,
-    });
-  }
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   if (activeProvider !== MEGAPAY_PROVIDER) {
@@ -105,14 +160,49 @@ Deno.serve(async (req) => {
       400,
     );
 
-  const { data: wallet, error: walletError } = await admin
-    .from("wallets")
-    .select("id, account_id, currency, is_simulated")
-    .eq("user_id", user.id)
-    .eq("account_mode", "real")
-    .eq("is_simulated", false)
-    .maybeSingle();
-  if (walletError || !wallet) {
+  let wallet: {
+    id: string;
+    account_id: string;
+    currency: string;
+    is_simulated: boolean;
+  } | null = null;
+  let pendingCount = 0;
+  try {
+    const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+    const lookedUp = await withDirectDb(async (sql) => {
+      const wallets = await sql`
+        select id, account_id, currency, is_simulated
+          from public.wallets
+         where user_id = ${user.id}::uuid
+           and account_mode = 'real'
+           and is_simulated = false
+         limit 1
+      `;
+      const pending = await sql`
+        select count(*)::int as n
+          from public.deposits
+         where user_id = ${user.id}::uuid
+           and provider = ${MEGAPAY_PROVIDER}
+           and status = 'PENDING'
+           and created_at >= ${since}::timestamptz
+      `;
+      return {
+        wallet: (wallets[0] as {
+          id: string;
+          account_id: string;
+          currency: string;
+          is_simulated: boolean;
+        } | undefined) ?? null,
+        pending: Number(pending[0]?.n ?? 0),
+      };
+    }, 4_000);
+    wallet = lookedUp.wallet;
+    pendingCount = lookedUp.pending;
+  } catch {
+    console.error("megapay-deposit", "wallet read timed out");
+    return json({ error: UNAVAILABLE_MESSAGE }, 503);
+  }
+  if (!wallet) {
     return json(
       {
         error: `Your ${realAccountShort()} wallet is not ready yet. Please contact support.`,
@@ -121,15 +211,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
-  const { count } = await admin
-    .from("deposits")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("provider", MEGAPAY_PROVIDER)
-    .eq("status", "PENDING")
-    .gte("created_at", since);
-  if ((count ?? 0) >= RATE_LIMIT_MAX_PENDING) {
+  if (pendingCount >= RATE_LIMIT_MAX_PENDING) {
     return json(
       {
         error:

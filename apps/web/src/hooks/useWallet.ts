@@ -68,8 +68,10 @@ export function useWallet(kind: AccountMode) {
       setRealWallet(null)
       setWalletConnected(false)
     }
-    void walletService.getWallet('real').then((result) => {
-      if (!cancelled) {
+    void walletService
+      .getWallet('real')
+      .then((result) => {
+        if (cancelled) return
         setRealWallet(result.data)
         const readable =
           Boolean(result.connected) &&
@@ -79,9 +81,16 @@ export function useWallet(kind: AccountMode) {
           (result.data.status === 'ready' || result.data.status === 'empty')
         setWalletConnected(readable)
         setMessage(result.message)
-        setLoading(false)
-      }
-    })
+      })
+      .catch(() => {
+        if (cancelled) return
+        setRealWallet(null)
+        setWalletConnected(false)
+        setMessage('Real wallet could not be loaded. Please try again later.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
     return () => {
       cancelled = true
     }

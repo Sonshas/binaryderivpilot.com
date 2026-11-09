@@ -2,10 +2,10 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './database.types'
 
 const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || ''
-const supabaseKey =
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() ||
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() ||
-  ''
+const publishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || ''
+const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || ''
+/** Prefer the JWT anon key. Some `sb_publishable_*` values hang Auth/Data API calls from the browser. */
+const supabaseKey = (anonKey.startsWith('eyJ') ? anonKey : '') || publishableKey || anonKey
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey)
 

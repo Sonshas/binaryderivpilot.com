@@ -35,6 +35,7 @@ $all = @(
   'mpesa-withdraw-dispatch',
   'real-trade',
   'real-trade-settle',
+  'real-wallet',
   'scanner-stk',
   'system-issues'
 )
@@ -51,7 +52,7 @@ try {
   foreach ($name in $toDeploy) {
     $extra = if ($noJwt -contains $name) { ' --no-verify-jwt' } else { '' }
     Write-Host "==> Deploying $name$extra" -ForegroundColor Cyan
-    $out = cmd /c "npx supabase functions deploy $name --project-ref $ProjectRef --use-api$extra 2>&1"
+    $out = cmd /c "npx supabase functions deploy $name --project-ref $ProjectRef --use-api --yes$extra 2>&1"
     $text = ($out | Out-String)
     if ($LASTEXITCODE -ne 0 -or $text -notmatch 'Deployed Functions') {
       Write-Host $text

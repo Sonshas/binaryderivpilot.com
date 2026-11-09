@@ -97,7 +97,7 @@ export function LoginForm() {
         </Button>
       </form>
       <p className="mt-4 text-sm text-mist">
-        New to SmartBaseBinary?{' '}
+        New to binaryderivpilot?{' '}
         <Link to="/register" className={authLink}>
           Create account
         </Link>

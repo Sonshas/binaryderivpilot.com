@@ -18,6 +18,7 @@ import {
   type StkQueryClassification,
 } from './daraja.ts'
 import { parseMegapayConfig, type MegapayConfig } from './megapay.ts'
+import { paymentEnv } from '../edge-env.ts'
 import { depositFeesFromMap, mergeMegapayConfig, parseQuickAmounts } from './payment-settings.ts'
 import { isServiceChargeDepositDetails, serviceKind } from '../service-charges.ts'
 import { notifyAdminsPaymentReceived, lookupUserEmail } from '../admin-payment-email.ts'
@@ -35,7 +36,7 @@ export interface DarajaConfig extends MegapayConfig {
 }
 
 export function darajaConfig(): DarajaConfig {
-  const env = Deno.env.toObject()
+  const env = paymentEnv()
   return {
     ...parseMegapayConfig(env),
     provider: parseDepositProvider(env.DEPOSIT_PROVIDER),

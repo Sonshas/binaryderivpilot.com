@@ -15,6 +15,7 @@ import {
   type WithdrawalConfig,
 } from "./withdrawals.ts";
 import { mergeWithdrawalConfig } from "./payment-settings.ts";
+import { paymentEnv } from "../edge-env.ts";
 import { loadPaymentSettingsMap, logEdgeError } from "../server.ts";
 
 export async function hasSettledRealTrade(
@@ -55,7 +56,7 @@ export interface WithdrawServerConfig extends WithdrawalConfig {
 }
 
 export function withdrawConfig(): WithdrawServerConfig {
-  const env = Deno.env.toObject();
+  const env = paymentEnv();
   return {
     ...parseWithdrawalConfig(env),
     daraja: darajaConfig(),

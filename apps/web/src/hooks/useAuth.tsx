@@ -35,12 +35,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    void authService.getSession().then((result) => {
-      if (cancelled) return
-      setUser(result.data)
-      setMessage(result.message)
-      setLoading(false)
-    })
+    void authService
+      .getSession()
+      .then((result) => {
+        if (cancelled) return
+        setUser(result.data)
+        setMessage(result.message)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setUser(null)
+        setMessage('Sign-in is temporarily unavailable.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
     const unsubscribe = authService.onAuthStateChange((next) => {
       if (cancelled) return
       setUser(next)

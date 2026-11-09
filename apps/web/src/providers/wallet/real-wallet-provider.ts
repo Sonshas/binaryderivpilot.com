@@ -5,7 +5,7 @@ import {
   REAL_USER_ID,
   REAL_WALLET_ID,
 } from "@/domain/account";
-import { abortSignalAfter } from "@/lib/abort-timeout";
+import { abortSignalAfter, raceWithTimeout } from "@/lib/abort-timeout";
 import { loadDemoSession } from "@/lib/demo-session";
 import { nowIso } from "@/lib/ids";
 import { loadRealBook, localBooksActive } from "@/lib/real-books";
@@ -131,24 +131,118 @@ function mapWallet(row: {
   };
 }
 
-const WALLET_READ_TIMEOUT_MS = 8000;
+/**
+ * A hung Data API left Deposit and Trade on "Loading…". Prefer the real-wallet
+ * Edge Function (direct Postgres) and fail the PostgREST fallback quickly.
+ */
+const WALLET_READ_TIMEOUT_MS = 6_000;
+
+type WalletRow = {
+  id: string;
+  user_id: string;
+  account_id: string;
+  account_mode: string;
+  currency: string;
+  balance: number | string;
+  available_balance: number | string;
+  locked_balance: number | string;
+  status: string;
+  is_simulated: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+let walletRowCache: {
+  userId: string;
+  at: number;
+  data: WalletRow | null;
+} | null = null;
+
+function cachedWalletRow(
+  userId: string,
+  error: { message?: string; name?: string } | null,
+) {
+  if (
+    walletRowCache &&
+    walletRowCache.userId === userId &&
+    Date.now() - walletRowCache.at < 5 * 60_000
+  ) {
+    return { data: walletRowCache.data, error: null };
+  }
+  return { data: null, error };
+}
 
 async function readRealWalletRow(
   client: NonNullable<ReturnType<typeof getSupabase>>,
   userId: string,
 ) {
-  const query = () =>
-    client
-      .from("wallets")
-      .select(
-        "id, user_id, account_id, account_mode, currency, balance, available_balance, locked_balance, status, is_simulated, created_at, updated_at",
-      )
-      .eq("user_id", userId)
-      .eq("account_mode", "real")
-      .abortSignal(abortSignalAfter(WALLET_READ_TIMEOUT_MS))
-      .maybeSingle();
-  const first = await query();
-  return first.error ? query() : first;
+  try {
+    const invoked = await raceWithTimeout(
+      client.functions.invoke<{ wallet?: WalletRow | null }>("real-wallet", {
+        method: "GET",
+      }),
+      WALLET_READ_TIMEOUT_MS,
+      "Wallet read timed out",
+    );
+    if (
+      !invoked.error &&
+      invoked.data &&
+      Object.prototype.hasOwnProperty.call(invoked.data, "wallet")
+    ) {
+      const data = (invoked.data.wallet ?? null) as WalletRow | null;
+      walletRowCache = { userId, at: Date.now(), data };
+      return { data, error: null };
+    }
+    const status = (invoked.error as { context?: { status?: number } } | null)
+      ?.context?.status;
+    if (status !== 404) {
+      return cachedWalletRow(
+        userId,
+        invoked.error ?? new Error("Wallet read failed"),
+      );
+    }
+  } catch (err) {
+    return cachedWalletRow(
+      userId,
+      err instanceof Error ? err : new Error("Wallet read timed out"),
+    );
+  }
+
+  let result: {
+    data: WalletRow | null;
+    error: { message?: string; name?: string } | null;
+  };
+  try {
+    result = await raceWithTimeout(
+      Promise.resolve(
+        client
+          .from("wallets")
+          .select(
+            "id, user_id, account_id, account_mode, currency, balance, available_balance, locked_balance, status, is_simulated, created_at, updated_at",
+          )
+          .eq("user_id", userId)
+          .eq("account_mode", "real")
+          .abortSignal(abortSignalAfter(WALLET_READ_TIMEOUT_MS))
+          .maybeSingle(),
+      ),
+      WALLET_READ_TIMEOUT_MS,
+      "Wallet read timed out",
+    );
+  } catch (err) {
+    return cachedWalletRow(
+      userId,
+      err instanceof Error ? err : new Error("Wallet read timed out"),
+    );
+  }
+  if (!result.error) {
+    walletRowCache = {
+      userId,
+      at: Date.now(),
+      data: (result.data as WalletRow | null) ?? null,
+    };
+    return result;
+  }
+  return cachedWalletRow(userId, result.error);
 }
 
 function mapTxStatus(status: string): TransactionStatus {

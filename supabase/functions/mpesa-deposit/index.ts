@@ -1,5 +1,5 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { DARAJA_PROVIDER } from "../_shared/daraja.ts";
+﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { DARAJA_PROVIDER, parseDepositProvider } from "../_shared/daraja.ts";
 import {
   generateDepositReference,
   kesToUsd,
@@ -8,6 +8,7 @@ import {
   validateAmountKes,
 } from "../_shared/megapay.ts";
 import { realAccountShort } from "../_shared/branding.ts";
+import { withFreshDb } from "../_shared/direct-db.ts";
 import {
   UNAVAILABLE_MESSAGE,
   adminClient,
@@ -31,6 +32,25 @@ import {
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
 const RATE_LIMIT_MAX_PENDING = 3;
 
+/** Avoid hung PostgREST when the deposit panel only needs the active provider. */
+async function peekDepositProvider(): Promise<string | null> {
+  try {
+    return await withFreshDb(async (sql) => {
+      const rows = await sql`
+        select value from public.payment_settings
+         where key = 'DEPOSIT_PROVIDER'
+         limit 1
+      `;
+      const raw = rows[0]?.value;
+      return typeof raw === "string" && raw.trim()
+        ? parseDepositProvider(raw)
+        : parseDepositProvider(Deno.env.get("DEPOSIT_PROVIDER"));
+    }, 4_000);
+  } catch {
+    return parseDepositProvider(Deno.env.get("DEPOSIT_PROVIDER"));
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: corsHeaders });
@@ -38,6 +58,13 @@ Deno.serve(async (req) => {
   const admin = adminClient();
   const user = await userFromRequest(admin, req);
   if (!user) return json({ error: "Sign in to deposit." }, 401);
+
+  if (req.method === "GET") {
+    const peeked = await peekDepositProvider();
+    if (peeked && peeked !== DARAJA_PROVIDER) {
+      return json({ provider: peeked });
+    }
+  }
 
   const cfg = await resolveDarajaConfig(admin);
   const enabled = await realPaymentsEnabled(admin);

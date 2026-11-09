@@ -3,6 +3,7 @@ import { AdminPayMode } from "@/features/admin/AdminPayMode";
 import { AdminWithdrawControls } from "@/features/admin/AdminWithdrawControls";
 import { AdminTradeSettingsPage } from "@/features/admin/AdminTradeSettingsPage";
 import { AdminTablePage } from "@/features/admin/AdminTables";
+import { AdminEarningsDashboard } from "@/features/admin/AdminEarningsDashboard";
 import { RealAdminDashboard } from "@/features/admin/RealAdminDashboard";
 import { RealWithdrawalsAdmin } from "@/features/admin/RealWithdrawalsAdmin";
 import { SystemHealthPanel } from "@/features/admin/SystemHealthPanel";
@@ -28,6 +29,10 @@ export function AdminSystemPage() {
 
 export function AdminDashboardPage() {
   return <RealAdminDashboard />;
+}
+
+export function AdminEarningsPage() {
+  return <AdminEarningsDashboard />;
 }
 
 export function AdminWithdrawalsPage() {

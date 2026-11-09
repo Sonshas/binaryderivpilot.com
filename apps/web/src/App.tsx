@@ -19,6 +19,7 @@ import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
 import {
   AdminAuditPage,
   AdminDashboardPage,
+  AdminEarningsPage,
   AdminSystemPage,
   AdminDepositsPage,
   AdminFeesPage,
@@ -117,6 +118,7 @@ export default function App() {
           }
         >
           <Route index element={<AdminDashboardPage />} />
+          <Route path="earnings" element={<AdminEarningsPage />} />
           <Route path="dashboard" element={<Navigate to="/admin" replace />} />
           <Route path="users" element={<AdminUsersPage />} />
           <Route
