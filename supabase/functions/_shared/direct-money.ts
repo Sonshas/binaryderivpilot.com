@@ -1,0 +1,382 @@
+import { runDirect } from "./direct-db.ts";
+
+type Row = Record<string, unknown>;
+
+function iso(value: unknown): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value.toISOString();
+  const text = String(value);
+  return text || null;
+}
+
+function rowOut(row: Row, dates: string[]): Row {
+  const next: Row = { ...row };
+  for (const key of dates) {
+    if (key in next) next[key] = iso(next[key]);
+  }
+  return next;
+}
+
+export async function readPaymentSettings(): Promise<Record<string, string>> {
+  const rows = await runDirect(
+    (sql) => sql<Row[]>`select key, value from public.payment_settings`,
+    4000,
+  );
+  const map: Record<string, string> = {};
+  for (const row of rows) {
+    const key = String(row.key ?? "");
+    if (key) map[key] = String(row.value ?? "");
+  }
+  return map;
+}
+
+/** null when the flag row is missing. */
+export async function readFlag(key: string): Promise<boolean | null> {
+  const rows = await runDirect(
+    (sql) =>
+      sql<Row[]>`select value from public.feature_flags where key = ${key} limit 1`,
+    3000,
+  );
+  if (!rows[0]) return null;
+  const value = rows[0].value;
+  if (value === true || value === "true" || value === "t") return true;
+  if (value === false || value === "false" || value === "f") return false;
+  return null;
+}
+
+export async function readUserAccess(userId: string): Promise<{
+  accountStatus: string;
+  depositsEnabled: boolean;
+  withdrawalsEnabled: boolean;
+  winRatePercent: number | null;
+  isVip: boolean;
+  withdrawGatesCleared: boolean;
+} | null> {
+  const rows = await runDirect(
+    (sql) => sql<Row[]>`
+      select account_status, deposits_enabled, withdrawals_enabled,
+             win_rate_percent, is_vip, withdraw_gates_cleared
+        from public.users
+       where id = ${userId}::uuid
+       limit 1
+    `,
+    3000,
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    accountStatus: String(row.account_status ?? "active"),
+    depositsEnabled: row.deposits_enabled !== false,
+    withdrawalsEnabled: row.withdrawals_enabled !== false,
+    winRatePercent: row.win_rate_percent == null ? null : Number(row.win_rate_percent),
+    isVip: row.is_vip === true,
+    withdrawGatesCleared: row.withdraw_gates_cleared === true,
+  };
+}
+
+export async function readRealWallet(userId: string): Promise<Row | null> {
+  const rows = await runDirect(
+    (sql) => sql<Row[]>`
+      select id, user_id, account_id, account_mode, currency, balance,
+             available_balance, locked_balance, status, is_simulated,
+             created_at, updated_at
+        from public.wallets
+       where user_id = ${userId}::uuid
+         and account_mode = 'real'
+         and is_simulated = false
+       limit 1
+    `,
+    4000,
+  );
+  const row = rows[0];
+  return row ? rowOut(row, ["created_at", "updated_at"]) : null;
+}
+
+export async function hasSettledTrade(userId: string): Promise<boolean> {
+  const rows = await runDirect(
+    (sql) => sql<Row[]>`
+      select id from public.trades
+       where user_id = ${userId}::uuid
+         and account_mode = 'real'
+         and is_simulated = false
+         and status in ('won', 'lost')
+       limit 1
+    `,
+    3000,
+  );
+  return rows.length > 0;
+}
+
+export async function readActivity(userId: string): Promise<{
+  wallet: Row | null;
+  deposits: Row[];
+  withdrawals: Row[];
+  transactions: Row[];
+}> {
+  return await runDirect(async (sql) => {
+    const [wallets, deposits, withdrawals, transactions] = await Promise.all([
+      sql<Row[]>`
+        select id, user_id, account_id, account_mode, currency, balance,
+               available_balance, locked_balance, status, is_simulated,
+               created_at, updated_at
+          from public.wallets
+         where user_id = ${userId}::uuid
+           and account_mode = 'real'
+           and is_simulated = false
+         limit 1
+      `,
+      sql<Row[]>`
+        select id, user_id, account_id, account_mode, wallet_id, amount, currency,
+               method, status, provider, details, is_simulated, created_at, updated_at
+          from public.deposits
+         where user_id = ${userId}::uuid
+           and account_mode = 'real'
+           and is_simulated = false
+         order by created_at desc
+         limit 100
+      `,
+      sql<Row[]>`
+        select id, user_id, account_id, account_mode, wallet_id, amount, currency,
+               destination, status, is_simulated, created_at, updated_at, provider,
+               reference, amount_kes, fee_kes, net_kes, msisdn, mpesa_receipt,
+               failure_reason, processing_at, completed_at, failed_at
+          from public.withdrawals
+         where user_id = ${userId}::uuid
+           and account_mode = 'real'
+           and is_simulated = false
+         order by created_at desc
+         limit 100
+      `,
+      sql<Row[]>`
+        select id, user_id, account_id, account_mode, wallet_id, type, amount,
+               currency, status, reference, note, is_simulated, created_at, updated_at
+          from public.transactions
+         where user_id = ${userId}::uuid
+           and account_mode = 'real'
+           and is_simulated = false
+         order by created_at desc
+         limit 100
+      `,
+    ]);
+    const dates = ["created_at", "updated_at", "processing_at", "completed_at", "failed_at"];
+    return {
+      wallet: wallets[0] ? rowOut(wallets[0], dates) : null,
+      deposits: deposits.map((row) => rowOut(row, dates)),
+      withdrawals: withdrawals.map((row) => rowOut(row, dates)),
+      transactions: transactions.map((row) => rowOut(row, dates)),
+    };
+  }, 6000);
+}
+
+export async function saveMegapayCursor(accountId: string): Promise<void> {
+  await runDirect(
+    (sql) => sql`
+      insert into public.payment_settings (key, value, description, updated_at)
+      values (
+        'MEGAPAY_RR_CURSOR',
+        ${accountId},
+        'Last MegaPay account used for round-robin STK (winsoft or vast).',
+        now()
+      )
+      on conflict (key) do update
+        set value = excluded.value, updated_at = now()
+    `,
+    3000,
+  );
+}
+
+export async function insertPendingDeposit(input: {
+  userId: string;
+  accountId: string;
+  walletId: string;
+  amountUsd: number;
+  currency: string;
+  details: Record<string, unknown>;
+}): Promise<Row> {
+  const rows = await runDirect(
+    (sql) => sql<Row[]>`
+      insert into public.deposits (
+        user_id, account_id, account_mode, wallet_id, amount, currency,
+        method, status, provider, is_simulated, details
+      ) values (
+        ${input.userId}::uuid,
+        ${input.accountId}::uuid,
+        'real',
+        ${input.walletId}::uuid,
+        ${input.amountUsd},
+        ${input.currency},
+        'mpesa',
+        'PENDING',
+        'megapay',
+        false,
+        ${sql.json(input.details)}
+      )
+      returning id, user_id, amount, currency, status, provider, provider_reference, details, created_at
+    `,
+    5000,
+  );
+  const row = rows[0];
+  if (!row) throw new Error("deposit_insert_empty");
+  return rowOut(row, ["created_at"]);
+}
+
+export async function storeDepositRequestId(
+  depositId: string,
+  requestId: string,
+  details: Record<string, unknown>,
+): Promise<void> {
+  await runDirect(
+    (sql) => sql`
+      update public.deposits
+         set provider_reference = ${requestId},
+             details = ${sql.json({ ...details, megapay_request_id: requestId })},
+             updated_at = now()
+       where id = ${depositId}::uuid
+    `,
+    4000,
+  );
+}
+
+export async function callFailDeposit(
+  id: string,
+  status: string,
+  kind: string,
+  reason: string,
+  raw: unknown,
+): Promise<void> {
+  await runDirect(
+    (sql) => sql`
+      select public.fail_megapay_deposit(
+        ${id}::uuid, ${status}, ${kind}, ${reason}, ${sql.json(raw ?? {})}
+      )
+    `,
+    5000,
+  );
+}
+
+export async function callCreditDeposit(
+  id: string,
+  receipt: string,
+  amountKes: number,
+  raw: unknown,
+): Promise<void> {
+  await runDirect(
+    (sql) => sql`
+      select public.credit_megapay_deposit(
+        ${id}::uuid, ${receipt}, ${amountKes}, ${sql.json(raw ?? {})}
+      )
+    `,
+    6000,
+  );
+}
+
+export async function callRequestWithdrawal(input: {
+  userId: string;
+  amountUsd: number;
+  msisdn: string;
+  kesPerUsd: number;
+  feeKes: number;
+  minKes: number;
+  maxKes: number;
+  provider: string;
+  reference: string;
+}): Promise<Row> {
+  const rows = await runDirect(
+    (sql) => sql<Row[]>`
+      select public.request_real_withdrawal(
+        ${input.userId}::uuid,
+        ${input.amountUsd},
+        ${input.msisdn},
+        ${input.kesPerUsd},
+        ${input.feeKes},
+        ${input.minKes},
+        ${input.maxKes},
+        ${input.provider},
+        ${input.reference}
+      ) as result
+    `,
+    6000,
+  );
+  const result = rows[0]?.result;
+  if (!result || typeof result !== "object") throw new Error("withdrawal_empty");
+  return result as Row;
+}
+
+export async function loadDepositDirect(id: string): Promise<Row | null> {
+  const rows = await runDirect(
+    (sql) => sql<Row[]>`
+      select id, user_id, amount, currency, status, provider, provider_reference, details, created_at
+        from public.deposits
+       where id = ${id}::uuid
+       limit 1
+    `,
+    4000,
+  );
+  return rows[0] ? rowOut(rows[0], ["created_at"]) : null;
+}
+
+export async function findMegapayDeposit(input: {
+  transactionId: string | null;
+  reference: string | null;
+}): Promise<Row | null> {
+  return await runDirect(async (sql) => {
+    if (input.transactionId) {
+      const byId = await sql<Row[]>`
+        select id, user_id, amount, currency, status, provider, provider_reference, details, created_at
+          from public.deposits
+         where provider = 'megapay'
+           and provider_reference = ${input.transactionId}
+         limit 1
+      `;
+      if (byId[0]) return rowOut(byId[0], ["created_at"]);
+    }
+    if (input.reference) {
+      const byRef = await sql<Row[]>`
+        select id, user_id, amount, currency, status, provider, provider_reference, details, created_at
+          from public.deposits
+         where provider = 'megapay'
+           and upper(details->>'reference') = ${input.reference}
+         limit 1
+      `;
+      if (byRef[0]) return rowOut(byRef[0], ["created_at"]);
+    }
+    return null;
+  }, 4000);
+}
+
+export async function insertWebhookEvent(input: {
+  payload: Record<string, unknown> | null;
+  rawBody: string;
+  contentType: string | null;
+  reference: string | null;
+  transactionId: string | null;
+  routedTo: string;
+  attempts: number;
+  lastAttemptAt: string | null;
+  processed: boolean;
+  processResult: string | null;
+}): Promise<string | null> {
+  const rows = await runDirect(
+    (sql) => sql<Row[]>`
+      insert into public.megapay_webhook_events (
+        payload, raw_body, content_type, reference, transaction_id, routed_to,
+        attempts, last_attempt_at, processed, process_result
+      ) values (
+        ${input.payload ? sql.json(input.payload) : null},
+        ${input.rawBody},
+        ${input.contentType},
+        ${input.reference},
+        ${input.transactionId},
+        ${input.routedTo},
+        ${input.attempts},
+        ${input.lastAttemptAt}::timestamptz,
+        ${input.processed},
+        ${input.processResult}
+      )
+      returning id
+    `,
+    5000,
+  );
+  const id = rows[0]?.id;
+  return id == null ? null : String(id);
+}

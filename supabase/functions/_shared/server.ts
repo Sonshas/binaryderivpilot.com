@@ -22,8 +22,6 @@ import {
   callCreditDeposit,
   callFailDeposit,
   loadDepositDirect,
-  readFlag,
-  readPaymentSettings,
   saveMegapayCursor,
 } from './direct-money.ts'
 import { depositFeesFromMap, mergeMegapayConfig, parseQuickAmounts, type SettingsMap } from './payments/payment-settings.ts'
@@ -395,6 +393,23 @@ export async function reconcileDeposit(admin: SupabaseClient, cfg: ServerConfig,
         details.kind === 'scanner' ||
         details.kind === 'tax'
       const rpc = serviceCharge ? 'complete_service_charge_deposit' : 'credit_megapay_deposit'
+      if (!serviceCharge) {
+        try {
+          await callCreditDeposit(deposit.id, result.receipt ?? '', result.amountKes, status.body)
+          const { notifyAdminsPaymentReceived, lookupUserEmail } = await import('./admin-payment-email.ts')
+          const userEmail = await lookupUserEmail(admin, deposit.user_id)
+          void notifyAdminsPaymentReceived(admin, {
+            amountKes: result.amountKes,
+            kind: 'deposit',
+            userEmail,
+            receipt: result.receipt ?? null,
+            depositId: deposit.id,
+          })
+          return (await loadDeposit(admin, deposit.id)) ?? deposit
+        } catch (err) {
+          console.error('credit_megapay_deposit.direct', err instanceof Error ? err.message : 'error')
+        }
+      }
       const { error } = await admin.rpc(rpc, {
         p_deposit_id: deposit.id,
         p_receipt: result.receipt ?? '',
