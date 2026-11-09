@@ -171,6 +171,11 @@ export function useWalletHistory(kind: AccountMode) {
         setMessage(tx.message)
         setLoading(false)
       }
+    }).catch(() => {
+      if (!cancelled) {
+        setLoading(false)
+        setMessage('Real deposits and withdrawals could not be loaded. Please try again later.')
+      }
     })
     return () => {
       cancelled = true

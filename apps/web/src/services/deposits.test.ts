@@ -50,7 +50,7 @@ describe('resolveDepositProvider', () => {
 })
 
 describe('depositService provider selection', () => {
-  it('uses the Daraja functions when DEPOSIT_PROVIDER=daraja', async () => {
+  it('uses the Daraja functions when MegaPay config is unavailable', async () => {
     responses.set('GET mpesa-deposit', darajaConfig)
     responses.set('POST mpesa-deposit', pending)
     responses.set('POST mpesa-status', { ...pending, status: 'COMPLETED', receipt: 'NLJ7RT61SV' })
@@ -64,12 +64,22 @@ describe('depositService provider selection', () => {
     expect(started.ok && started.data.status).toBe('PENDING')
     const status = await depositService.checkStatus('daraja', 'd1')
     expect(status.ok && status.data.receipt).toBe('NLJ7RT61SV')
-    expect(calls.map((c) => `${c.method} ${c.name}`)).toEqual(['GET mpesa-deposit', 'POST mpesa-deposit', 'POST mpesa-status'])
-    expect(calls[1]!.body).toEqual({ amount_kes: 1600, phone: '254712345678' })
+    const depositCalls = calls
+      .filter((c) => c.name !== 'system-issues')
+      .map((c) => `${c.method} ${c.name}`)
+    expect(depositCalls).toEqual([
+      'GET megapay-deposit',
+      'GET mpesa-deposit',
+      'POST mpesa-deposit',
+      'POST mpesa-status',
+    ])
+    expect(calls.find((c) => c.method === 'POST' && c.name === 'mpesa-deposit')?.body).toEqual({
+      amount_kes: 1600,
+      phone: '254712345678',
+    })
   })
 
-  it('falls back to the MegaPay functions when DEPOSIT_PROVIDER=megapay', async () => {
-    responses.set('GET mpesa-deposit', { provider: 'megapay' })
+  it('loads MegaPay config first when the MegaPay rail is available', async () => {
     responses.set('GET megapay-deposit', megapayConfig)
     responses.set('POST megapay-deposit', pending)
     responses.set('POST megapay-status', pending)
@@ -80,7 +90,6 @@ describe('depositService provider selection', () => {
     await depositService.startDeposit('megapay', 1600, '254712345678')
     await depositService.checkStatus('megapay', 'd1')
     expect(calls.map((c) => `${c.method} ${c.name}`)).toEqual([
-      'GET mpesa-deposit',
       'GET megapay-deposit',
       'POST megapay-deposit',
       'POST megapay-status',

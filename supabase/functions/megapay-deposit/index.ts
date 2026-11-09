@@ -11,7 +11,11 @@ import { realAccountShort } from "../_shared/branding.ts";
 import { parseDepositProvider } from "../_shared/daraja.ts";
 import { withDirectDb } from "../_shared/direct-db.ts";
 import {
-  DEPOSIT_COLUMNS,
+  callFailDeposit,
+  insertPendingDeposit,
+  storeDepositRequestId,
+} from "../_shared/direct-money.ts";
+import {
   UNAVAILABLE_MESSAGE,
   adminClient,
   claimMegapayAccount,
@@ -235,19 +239,13 @@ Deno.serve(async (req) => {
   let deposit: DepositRow | null = null;
   for (let attempt = 0; attempt < 3 && !deposit; attempt++) {
     const reference = generateDepositReference();
-    const { data, error } = await admin
-      .from("deposits")
-      .insert({
-        user_id: user.id,
-        account_id: wallet.account_id,
-        account_mode: "real",
-        wallet_id: wallet.id,
-        amount: amountUsd,
+    try {
+      const row = await insertPendingDeposit({
+        userId: user.id,
+        accountId: wallet.account_id,
+        walletId: wallet.id,
+        amountUsd,
         currency: wallet.currency || "USD",
-        method: "mpesa",
-        status: "PENDING",
-        provider: MEGAPAY_PROVIDER,
-        is_simulated: false,
         details: {
           reference,
           amount_kes: amount.amountKes,
@@ -256,16 +254,19 @@ Deno.serve(async (req) => {
           megapay_account: megapayAccount.id,
           initiated_at: new Date().toISOString(),
         },
-      })
-      .select(DEPOSIT_COLUMNS)
-      .single();
-    if (data) deposit = data as DepositRow;
-    else if (error?.code !== "23505") {
-      await logEdgeError(admin, "deposits", "megapay-deposit.insert", error, {
-        code: error?.code,
+      });
+      const details = row.details && typeof row.details === "object" && !Array.isArray(row.details)
+        ? row.details as Record<string, unknown>
+        : {};
+      deposit = { ...(row as unknown as DepositRow), details };
+    } catch (err) {
+      const code = err && typeof err === "object" && "code" in err ? String(err.code) : "";
+      if (code === "23505") continue;
+      await logEdgeError(admin, "deposits", "megapay-deposit.insert", err, {
+        code,
         userId: user.id,
       });
-      return json({ error: UNAVAILABLE_MESSAGE }, 500);
+      return json({ error: UNAVAILABLE_MESSAGE }, 503);
     }
   }
   if (!deposit) return json({ error: UNAVAILABLE_MESSAGE }, 500);
@@ -311,13 +312,19 @@ Deno.serve(async (req) => {
         userId: user.id,
       },
     );
-    await admin.rpc("fail_megapay_deposit", {
-      p_deposit_id: deposit.id,
-      p_status: "FAILED",
-      p_kind: failure?.kind ?? "initiation_failed",
-      p_reason: failure?.reason ?? "STK push rejected",
-      p_raw: failure?.raw ?? {},
-    });
+    try {
+      await callFailDeposit(
+        deposit.id,
+        "FAILED",
+        failure?.kind ?? "initiation_failed",
+        failure?.reason ?? "STK push rejected",
+        failure?.raw ?? {},
+      );
+    } catch (err) {
+      await logEdgeError(admin, "deposits", "fail_megapay_deposit", err, {
+        userId: user.id,
+      });
+    }
     return json(
       {
         error:
@@ -329,24 +336,12 @@ Deno.serve(async (req) => {
     );
   }
 
-  const { error: updateError } = await admin
-    .from("deposits")
-    .update({
-      provider_reference: requestId,
-      details: { ...deposit.details, megapay_request_id: requestId },
-    })
-    .eq("id", deposit.id);
-  if (updateError) {
-    await logEdgeError(
-      admin,
-      "deposits",
-      "megapay-deposit.store_request_id",
-      updateError,
-      {
-        code: updateError.code,
-        userId: user.id,
-      },
-    );
+  try {
+    await storeDepositRequestId(deposit.id, requestId, deposit.details);
+  } catch (err) {
+    await logEdgeError(admin, "deposits", "megapay-deposit.store_request_id", err, {
+      userId: user.id,
+    });
   }
 
   return json({

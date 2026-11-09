@@ -205,7 +205,7 @@ function userFromPublicRow(row: PublicUserRow, fallbackEmail: string): User {
   };
 }
 
-const PROFILE_HYDRATE_MS = 4_000;
+const PROFILE_HYDRATE_MS = 2_500;
 
 async function hydrateUser(authUser: AuthUser): Promise<User> {
   const client = getSupabase();
@@ -971,15 +971,27 @@ export const authService = {
       country: typeof meta.country === "string" ? meta.country : undefined,
       displayName: typeof meta.name === "string" ? meta.name : undefined,
     };
-    const { data: profile } = await client
-      .from("profiles")
-      .select("display_name, phone, country")
-      .eq("user_id", authUser.id)
-      .maybeSingle();
-    if (profile) {
-      extras.displayName = profile.display_name ?? extras.displayName;
-      if (profile.phone) extras.phone = profile.phone;
-      if (profile.country) extras.country = profile.country;
+    // External PostgREST often hangs; fail fast and keep auth metadata.
+    try {
+      const { data: profile } = await raceWithTimeout(
+        Promise.resolve(
+          client
+            .from("profiles")
+            .select("display_name, phone, country")
+            .eq("user_id", authUser.id)
+            .abortSignal(abortSignalAfter(3_000))
+            .maybeSingle(),
+        ),
+        3_500,
+        "Profile read timed out",
+      );
+      if (profile) {
+        extras.displayName = profile.display_name ?? extras.displayName;
+        if (profile.phone) extras.phone = profile.phone;
+        if (profile.country) extras.country = profile.country;
+      }
+    } catch {
+      /* metadata extras already set */
     }
     return extras;
   },

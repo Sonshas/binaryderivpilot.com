@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Input } from '@/components/ui'
 import { normalizeKenyanPhone } from '@/domain/megapay'
 import { localPhoneDisplay } from '@/domain/withdrawals'
+import { raceWithTimeout } from '@/lib/abort-timeout'
 import { cn } from '@/lib/cn'
 import { authService } from '@/services/auth'
 
@@ -24,21 +25,23 @@ export function MpesaPhoneChoice({
 
   useEffect(() => {
     let cancelled = false
-    void authService.getProfileExtras().then((extras) => {
-      if (cancelled) return
-      const normalized = normalizeKenyanPhone(extras.phone ?? '')
-      const local = normalized ? localPhoneDisplay(normalized) : ''
-      setAccountPhone(local)
-      setLoaded(true)
-      if (picked.current) return
-      if (local) {
-        setSource('account')
-        onChangeRef.current(local)
-      } else {
-        setSource('other')
-        onChangeRef.current('')
-      }
-    })
+    void raceWithTimeout(authService.getProfileExtras(), 4_000, 'Profile timed out')
+      .catch(() => ({} as Awaited<ReturnType<typeof authService.getProfileExtras>>))
+      .then((extras) => {
+        if (cancelled) return
+        const normalized = normalizeKenyanPhone(extras.phone ?? '')
+        const local = normalized ? localPhoneDisplay(normalized) : ''
+        setAccountPhone(local)
+        setLoaded(true)
+        if (picked.current) return
+        if (local) {
+          setSource('account')
+          onChangeRef.current(local)
+        } else {
+          setSource('other')
+          onChangeRef.current('')
+        }
+      })
     return () => {
       cancelled = true
     }

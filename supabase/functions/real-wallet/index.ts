@@ -1,5 +1,5 @@
 ﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { withFreshDb } from "../_shared/direct-db.ts";
+import { readActivity } from "../_shared/direct-money.ts";
 import {
   adminClient,
   corsHeaders,
@@ -27,19 +27,8 @@ Deno.serve(async (req) => {
   if (!user) return json({ error: "Sign in to continue." }, 401);
 
   try {
-    const wallet = await withFreshDb(async (sql) => {
-      const rows = await sql`
-        select id, user_id, account_id, account_mode, currency, balance,
-               available_balance, locked_balance, status, is_simulated,
-               created_at, updated_at
-          from public.wallets
-         where user_id = ${user.id}
-           and account_mode = 'real'
-         limit 1
-      `;
-      return (rows[0] as WalletRow | undefined) ?? null;
-    }, 5_000);
-    return json({ wallet });
+    const activity = await readActivity(user.id);
+    return json(activity);
   } catch (directErr) {
     console.error(
       "real-wallet.direct",

@@ -152,11 +152,58 @@ type WalletRow = {
   updated_at: string;
 };
 
+type MoneyActivity = {
+  wallet?: WalletRow | null;
+  deposits?: Record<string, unknown>[];
+  withdrawals?: Record<string, unknown>[];
+  transactions?: Record<string, unknown>[];
+};
+
 let walletRowCache: {
   userId: string;
   at: number;
   data: WalletRow | null;
 } | null = null;
+
+let activityFlight: {
+  userId: string;
+  promise: Promise<MoneyActivity | null>;
+} | null = null;
+
+function loadMoneyActivity(
+  client: NonNullable<ReturnType<typeof getSupabase>>,
+  userId: string,
+): Promise<MoneyActivity | null> {
+  if (activityFlight?.userId === userId) return activityFlight.promise;
+  const promise = (async () => {
+    try {
+      const invoked = await raceWithTimeout(
+        client.functions.invoke<MoneyActivity>("real-wallet", { method: "GET" }),
+        WALLET_READ_TIMEOUT_MS,
+        "Wallet read timed out",
+      );
+      if (
+        invoked.error ||
+        !invoked.data ||
+        !Object.prototype.hasOwnProperty.call(invoked.data, "wallet")
+      ) {
+        return null;
+      }
+      walletRowCache = {
+        userId,
+        at: Date.now(),
+        data: (invoked.data.wallet ?? null) as WalletRow | null,
+      };
+      return invoked.data;
+    } catch {
+      return null;
+    }
+  })();
+  activityFlight = { userId, promise };
+  return promise.finally(() => {
+    if (activityFlight?.promise === promise) activityFlight = null;
+  });
+}
 
 function cachedWalletRow(
   userId: string,
@@ -176,36 +223,12 @@ async function readRealWalletRow(
   client: NonNullable<ReturnType<typeof getSupabase>>,
   userId: string,
 ) {
-  try {
-    const invoked = await raceWithTimeout(
-      client.functions.invoke<{ wallet?: WalletRow | null }>("real-wallet", {
-        method: "GET",
-      }),
-      WALLET_READ_TIMEOUT_MS,
-      "Wallet read timed out",
-    );
-    if (
-      !invoked.error &&
-      invoked.data &&
-      Object.prototype.hasOwnProperty.call(invoked.data, "wallet")
-    ) {
-      const data = (invoked.data.wallet ?? null) as WalletRow | null;
-      walletRowCache = { userId, at: Date.now(), data };
-      return { data, error: null };
-    }
-    const status = (invoked.error as { context?: { status?: number } } | null)
-      ?.context?.status;
-    if (status !== 404) {
-      return cachedWalletRow(
-        userId,
-        invoked.error ?? new Error("Wallet read failed"),
-      );
-    }
-  } catch (err) {
-    return cachedWalletRow(
-      userId,
-      err instanceof Error ? err : new Error("Wallet read timed out"),
-    );
+  const activity = await loadMoneyActivity(client, userId);
+  if (activity && Object.prototype.hasOwnProperty.call(activity, "wallet")) {
+    return {
+      data: (activity.wallet ?? null) as WalletRow | null,
+      error: null,
+    };
   }
 
   let result: {
@@ -371,6 +394,32 @@ export const realWalletProvider: WalletProvider = {
       );
     }
 
+    const activity = await loadMoneyActivity(client, session.user.id);
+    if (activity?.transactions) {
+      const rows: Transaction[] = activity.transactions.map((row) => ({
+        id: String(row.id),
+        userId: String(row.user_id),
+        accountId: String(row.account_id),
+        accountMode: "real" as const,
+        walletId: String(row.wallet_id),
+        type: mapTxType(String(row.type ?? "")),
+        amount: num(row.amount),
+        currency: String(row.currency ?? "USD"),
+        status: mapTxStatus(String(row.status ?? "")),
+        reference: (row.reference as string | null) ?? null,
+        note: (row.note as string | null) ?? null,
+        isSimulated: false,
+        createdAt: String(row.created_at ?? ""),
+        updatedAt: String(row.updated_at ?? ""),
+      }));
+      return okReal(
+        rows,
+        rows.length
+          ? `${realAccountShort()} transactions loaded.`
+          : `No ${realAccountShort()} transactions yet.`,
+      );
+    }
+
     const { data, error } = await client
       .from("transactions")
       .select(
@@ -379,7 +428,8 @@ export const realWalletProvider: WalletProvider = {
       .eq("user_id", session.user.id)
       .eq("account_mode", "real")
       .eq("is_simulated", false)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .abortSignal(abortSignalAfter(3_000));
 
     if (error) {
       reportBackendIssue("wallet", "transactions.read", error);
@@ -432,6 +482,43 @@ export const realWalletProvider: WalletProvider = {
       );
     }
 
+    const activity = await loadMoneyActivity(client, session.user.id);
+    if (activity?.deposits) {
+      const rows: Deposit[] = activity.deposits.map((row) => {
+        const details = (
+          row.details && typeof row.details === "object" && !Array.isArray(row.details)
+            ? row.details
+            : {}
+        ) as Record<string, unknown>;
+        return {
+          id: String(row.id),
+          userId: String(row.user_id),
+          accountId: String(row.account_id),
+          accountMode: "real" as const,
+          walletId: String(row.wallet_id),
+          amount: num(row.amount),
+          currency: String(row.currency ?? "USD"),
+          method: String(row.method ?? ""),
+          status: mapTxStatus(String(row.status ?? "")),
+          isSimulated: false,
+          walletKind: "real" as const,
+          provider: (row.provider as string | null) ?? null,
+          reference: typeof details.reference === "string" ? details.reference : null,
+          amountKes: details.amount_kes != null ? num(details.amount_kes) : null,
+          failureReason:
+            typeof details.failure_reason === "string" ? details.failure_reason : null,
+          createdAt: String(row.created_at ?? ""),
+          updatedAt: String(row.updated_at ?? ""),
+        };
+      });
+      return okReal(
+        rows,
+        rows.length
+          ? `${realAccountShort()} deposits loaded.`
+          : `No ${realAccountShort()} deposits yet.`,
+      );
+    }
+
     const { data, error } = await client
       .from("deposits")
       .select(
@@ -440,7 +527,8 @@ export const realWalletProvider: WalletProvider = {
       .eq("user_id", session.user.id)
       .eq("account_mode", "real")
       .eq("is_simulated", false)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .abortSignal(abortSignalAfter(3_000));
 
     if (error) {
       reportBackendIssue("wallet", "deposits.read", error);
@@ -509,6 +597,42 @@ export const realWalletProvider: WalletProvider = {
       );
     }
 
+    const activity = await loadMoneyActivity(client, session.user.id);
+    if (activity?.withdrawals) {
+      const rows: Withdrawal[] = activity.withdrawals.map((row) => ({
+        id: String(row.id),
+        userId: String(row.user_id),
+        accountId: String(row.account_id),
+        accountMode: "real" as const,
+        walletId: String(row.wallet_id),
+        amount: num(row.amount),
+        currency: String(row.currency ?? "USD"),
+        destination: String(row.destination ?? ""),
+        status: mapTxStatus(String(row.status ?? "")),
+        isSimulated: false,
+        walletKind: "real" as const,
+        createdAt: String(row.created_at ?? ""),
+        updatedAt: String(row.updated_at ?? ""),
+        provider: (row.provider as string | null) ?? null,
+        reference: (row.reference as string | null) ?? null,
+        amountKes: row.amount_kes == null ? null : num(row.amount_kes),
+        feeKes: num(row.fee_kes),
+        netKes: row.net_kes == null ? null : num(row.net_kes),
+        msisdn: (row.msisdn as string | null) ?? null,
+        receipt: (row.mpesa_receipt as string | null) ?? null,
+        failureReason: (row.failure_reason as string | null) ?? null,
+        processingAt: (row.processing_at as string | null) ?? null,
+        completedAt: (row.completed_at as string | null) ?? null,
+        failedAt: (row.failed_at as string | null) ?? null,
+      }));
+      return okReal(
+        rows,
+        rows.length
+          ? `${realAccountShort()} withdrawals loaded.`
+          : `No ${realAccountShort()} withdrawals yet.`,
+      );
+    }
+
     const { data, error } = await client
       .from("withdrawals")
       .select(
@@ -517,7 +641,8 @@ export const realWalletProvider: WalletProvider = {
       .eq("user_id", session.user.id)
       .eq("account_mode", "real")
       .eq("is_simulated", false)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .abortSignal(abortSignalAfter(3_000));
 
     if (error) {
       reportBackendIssue("wallet", "withdrawals.read", error);
