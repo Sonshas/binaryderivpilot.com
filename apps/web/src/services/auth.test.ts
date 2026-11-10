@@ -34,6 +34,22 @@ vi.mock('@/lib/supabase', () => ({
       : null,
   async dataApiFetch(input: RequestInfo | URL, init?: RequestInit) {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+    if (url.includes('/functions/v1/login-phone')) {
+      const body = JSON.parse(String(init?.body ?? '{}')) as { phone?: string }
+      const match = body.phone
+        ? [...memory.users.values()].find((user) => user.email === 'auth-flow@example.com')
+        : null
+      if (!match) {
+        return new Response(JSON.stringify({ email: null }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ email: match.email }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     if (url.includes('/auth/v1/token?grant_type=password')) {
       const body = JSON.parse(String(init?.body ?? '{}')) as { email?: string; password?: string }
       const stored = body.email ? memory.users.get(body.email) : null
@@ -173,6 +189,23 @@ describe('Supabase auth service (mocked client)', () => {
 
     const bad = await authService.signIn({ email: 'auth-flow@example.com', password: 'wrongpass1' })
     expect(bad.connected).toBe(false)
+  })
+
+  it('signs in with a phone number when the data API lookup is down', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'eyJtest')
+    const signup = await authService.signUp({
+      name: 'Phone Trader',
+      email: 'auth-flow@example.com',
+      password: 'demopass1',
+      phone: '0712345678',
+      country: 'Kenya',
+    })
+    expect(signup.connected).toBe(true)
+    const login = await authService.signIn({ email: '0712345678', password: 'demopass1' })
+    expect(login.connected).toBe(true)
+    expect(login.data?.email).toBe('auth-flow@example.com')
+    vi.unstubAllEnvs()
   })
 
   it('accepts password reset requests', async () => {

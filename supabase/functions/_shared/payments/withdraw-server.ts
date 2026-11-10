@@ -16,12 +16,21 @@ import {
 } from "./withdrawals.ts";
 import { mergeWithdrawalConfig } from "./payment-settings.ts";
 import { paymentEnv } from "../edge-env.ts";
+import { hasSettledTrade, loadWithdrawalRow } from "../direct-money.ts";
 import { loadPaymentSettingsMap, logEdgeError } from "../server.ts";
 
 export async function hasSettledRealTrade(
   admin: SupabaseClient,
   userId: string,
 ): Promise<boolean> {
+  try {
+    return await hasSettledTrade(userId);
+  } catch (err) {
+    console.error(
+      "trade_eligibility.direct",
+      err instanceof Error ? err.message : "error",
+    );
+  }
   const { data, error } = await admin
     .from("trades")
     .select("id")
@@ -171,6 +180,15 @@ export async function loadWithdrawal(
   admin: SupabaseClient,
   id: string,
 ): Promise<WithdrawalRow | null> {
+  try {
+    const row = await loadWithdrawalRow(id);
+    if (row) return row as WithdrawalRow;
+  } catch (err) {
+    console.error(
+      "withdrawal.load",
+      err instanceof Error ? err.message : "error",
+    );
+  }
   const { data } = await admin
     .from("withdrawals")
     .select(WITHDRAWAL_COLUMNS)
@@ -230,7 +248,24 @@ export function requestErrorMessage(
   dbMessage: string,
   cfg: WithdrawalConfig,
 ): { status: number; error: string } {
-  const code = (dbMessage.trim().match(/^([a-z_]+)/i) ?? [])[1] ?? "";
+  const known = [
+    "insufficient_funds",
+    "withdrawal_already_open",
+    "below_minimum",
+    "above_maximum",
+    "amount_too_small",
+    "invalid_phone",
+    "invalid_amount",
+    "withdrawals_paused",
+    "account_suspended",
+    "no_real_trade",
+    "wallet_not_found",
+    "wallet_not_ready",
+  ];
+  const code =
+    known.find((item) => dbMessage.includes(item)) ??
+    (dbMessage.trim().match(/^([a-z_]+)/i) ?? [])[1] ??
+    "";
   switch (code) {
     case "insufficient_funds":
       return {

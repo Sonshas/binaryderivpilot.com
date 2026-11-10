@@ -23,6 +23,7 @@ import {
   processingTimeCopy,
   validateWithdrawalAmountUsd,
 } from "../_shared/withdrawals.ts";
+import { callRequestWithdrawal, readFlag, readRealWallet } from "../_shared/direct-money.ts";
 import { loadUserAccess } from "../_shared/user-access.ts";
 
 const UNAVAILABLE = "Withdrawals temporarily unavailable";
@@ -36,12 +37,26 @@ Deno.serve(async (req) => {
   if (!user) return json({ error: "Sign in to withdraw." }, 401);
   const cfg = await resolveWithdrawConfig(admin);
 
-  const { data: flag } = await admin
-    .from("feature_flags")
-    .select("value")
-    .eq("key", "REAL_WITHDRAWALS_ENABLED")
-    .maybeSingle();
-  const enabled = flag == null || flag.value === true;
+  let enabled = true;
+  try {
+    const flag = await readFlag("REAL_WITHDRAWALS_ENABLED");
+    enabled = flag == null || flag === true;
+  } catch (err) {
+    console.error(
+      "withdraw.flag",
+      err instanceof Error ? err.message : "error",
+    );
+    try {
+      const { data: flag } = await admin
+        .from("feature_flags")
+        .select("value")
+        .eq("key", "REAL_WITHDRAWALS_ENABLED")
+        .maybeSingle();
+      enabled = flag == null || flag.value === true;
+    } catch {
+      enabled = true;
+    }
+  }
   const activeMode = b2cActive(cfg) ? "daraja_b2c" : "manual";
 
   if (req.method === "GET") {
@@ -103,14 +118,39 @@ Deno.serve(async (req) => {
   if (!(await hasSettledRealTrade(admin, user.id)))
     return json({ error: NO_REAL_TRADE_MESSAGE }, 403);
 
-  const { data: wallet, error: walletError } = await admin
-    .from("wallets")
-    .select("id, available_balance, currency, status")
-    .eq("user_id", user.id)
-    .eq("account_mode", "real")
-    .eq("is_simulated", false)
-    .maybeSingle();
-  if (walletError || !wallet) {
+  let wallet: {
+    id: string;
+    available_balance: number | string;
+    currency: string;
+    status: string;
+  } | null = null;
+  try {
+    const row = await readRealWallet(user.id);
+    if (row) {
+      wallet = {
+        id: String(row.id),
+        available_balance: row.available_balance as number | string,
+        currency: String(row.currency ?? "USD"),
+        status: String(row.status ?? ""),
+      };
+    }
+  } catch (err) {
+    console.error(
+      "withdraw.wallet",
+      err instanceof Error ? err.message : "error",
+    );
+  }
+  if (!wallet) {
+    const { data, error: walletError } = await admin
+      .from("wallets")
+      .select("id, available_balance, currency, status")
+      .eq("user_id", user.id)
+      .eq("account_mode", "real")
+      .eq("is_simulated", false)
+      .maybeSingle();
+    if (!walletError && data) wallet = data;
+  }
+  if (!wallet) {
     return json(
       {
         error: `Your ${realAccountShort()} wallet is not ready yet. Please contact support.`,
@@ -131,23 +171,28 @@ Deno.serve(async (req) => {
   let lastError: string | null = null;
   for (let attempt = 0; attempt < 3 && !result; attempt++) {
     const reference = generateWithdrawalReference();
-    const { data, error } = await admin.rpc("request_real_withdrawal", {
-      p_user_id: user.id,
-      p_amount_usd: amount.amountUsd,
-      p_msisdn: msisdn,
-      p_kes_per_usd: cfg.kesPerUsd,
-      p_fee_kes: cfg.feeKes,
-      p_min_kes: cfg.minKes,
-      p_max_kes: cfg.maxKes,
-      p_provider: activeMode,
-      p_reference: reference,
-    });
-    if (!error && data) {
-      result = data as Record<string, unknown>;
+    try {
+      result = await callRequestWithdrawal({
+        userId: user.id,
+        amountUsd: amount.amountUsd,
+        msisdn,
+        kesPerUsd: cfg.kesPerUsd,
+        feeKes: cfg.feeKes,
+        minKes: cfg.minKes,
+        maxKes: cfg.maxKes,
+        provider: activeMode,
+        reference,
+      });
       break;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "unknown";
+      const code = err && typeof err === "object" && "code" in err
+        ? String((err as { code?: string }).code ?? "")
+        : "";
+      if (code !== "23505" && !/duplicate key|withdrawals_reference_uniq/i.test(lastError)) {
+        break;
+      }
     }
-    lastError = error?.message ?? "unknown";
-    if (!/duplicate key|withdrawals_reference_uniq/i.test(lastError)) break;
   }
 
   if (!result) {

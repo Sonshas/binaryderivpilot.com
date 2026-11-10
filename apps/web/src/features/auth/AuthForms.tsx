@@ -46,12 +46,13 @@ export function LoginForm() {
     setLoading(true)
     setOk(false)
     setMessage(null)
-    // Hard ceiling so the button never sticks on "Signing in…" if Auth wedges.
+    // One phone lookup (8s) plus one password grant (16s) finishes under this.
+    // A second full grant used to outlive 28s and the button looked stuck.
     const ceiling = globalThis.setTimeout(() => {
       setLoading(false)
       setOk(false)
       setMessage('Sign-in is taking too long. Please try again.')
-    }, 28_000)
+    }, 30_000)
     try {
       const result = await authService.signIn({ email, password })
       setMessage(result.message)

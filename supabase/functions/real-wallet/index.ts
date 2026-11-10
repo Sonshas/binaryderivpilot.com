@@ -1,5 +1,5 @@
 ﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { readRealWallet } from "../_shared/direct-money.ts";
+import { readActivity, readActivityViaRest } from "../_shared/direct-money.ts";
 import {
   adminClient,
   corsHeaders,
@@ -7,12 +7,9 @@ import {
   userFromRequest,
 } from "../_shared/server.ts";
 
-const WALLET_COLUMNS =
-  "id, user_id, account_id, account_mode, currency, balance, available_balance, locked_balance, status, is_simulated, created_at, updated_at";
-
 /**
- * REAL wallet read that bypasses hung external PostgREST.
- * Keep this path short: one wallet query, then a brief in-edge REST fallback.
+ * REAL wallet, deposits, withdrawals, and transactions.
+ * Data API first. A pooler timeout must not drop the deposit list.
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -25,44 +22,33 @@ Deno.serve(async (req) => {
   if (!user) return json({ error: "Sign in to continue." }, 401);
 
   try {
-    const wallet = await readRealWallet(user.id);
+    const activity = await readActivityViaRest(user.id);
     return json({
-      wallet,
-      deposits: [],
-      withdrawals: [],
-      transactions: [],
+      wallet: activity.wallet,
+      deposits: activity.deposits,
+      withdrawals: activity.withdrawals,
+      transactions: activity.transactions,
+    });
+  } catch (restErr) {
+    console.error(
+      "real-wallet.rest",
+      restErr instanceof Error ? restErr.message : "error",
+    );
+  }
+
+  try {
+    const activity = await readActivity(user.id);
+    return json({
+      wallet: activity.wallet,
+      deposits: activity.deposits,
+      withdrawals: activity.withdrawals,
+      transactions: activity.transactions,
     });
   } catch (directErr) {
     console.error(
       "real-wallet.direct",
       directErr instanceof Error ? directErr.message : "error",
     );
-  }
-
-  try {
-    const result = await Promise.race([
-      admin
-        .from("wallets")
-        .select(WALLET_COLUMNS)
-        .eq("user_id", user.id)
-        .eq("account_mode", "real")
-        .maybeSingle(),
-      new Promise<{ data: null; error: { message: string } }>((_, reject) => {
-        setTimeout(() => reject(new Error("timeout")), 3_000);
-      }),
-    ]);
-    if (result.error) {
-      console.error("real-wallet.rest", result.error.message);
-      return json({ error: "Real balance is unavailable right now." }, 503);
-    }
-    return json({
-      wallet: result.data ?? null,
-      deposits: [],
-      withdrawals: [],
-      transactions: [],
-    });
-  } catch {
-    console.error("real-wallet", "read timed out");
     return json({ error: "Real balance is unavailable right now." }, 503);
   }
 });

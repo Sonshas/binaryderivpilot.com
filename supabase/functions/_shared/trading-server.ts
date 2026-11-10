@@ -30,10 +30,12 @@ async function realWinRatePercent(admin: SupabaseClient): Promise<number> {
     : DEFAULT_WIN_RATE_PERCENT;
 }
 
-const DERIV_WS_URL = "wss://api.derivws.com/trading/v1/options/ws/public";
-const CONNECT_TIMEOUT_MS = 5_000;
-const REQUEST_TIMEOUT_MS = 5_000;
-const ENTRY_DEADLINE_MS = 5_000;
+const DERIV_WS_URLS = [
+  "wss://api.derivws.com/trading/v1/options/ws/public",
+];
+const CONNECT_TIMEOUT_MS = 3_000;
+const REQUEST_TIMEOUT_MS = 3_000;
+const ENTRY_DEADLINE_MS = 4_000;
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -85,25 +87,16 @@ function userFromAccessToken(
   }
 }
 
-export async function userFromRequest(admin: SupabaseClient, req: Request) {
+export async function userFromRequest(_admin: SupabaseClient, req: Request) {
   const token = (req.headers.get("Authorization") ?? "").replace(
     /^Bearer\s+/i,
     "",
   );
   if (!token) return null;
-  // Gateway already verified JWT for verify_jwt functions. Prefer Auth API, but
-  // never block trade config/placement on a hung getUser — decode the access token.
-  try {
-    const auth = await Promise.race([
-      admin.auth.getUser(token),
-      new Promise<null>((_, reject) => {
-        setTimeout(() => reject(new Error("auth timeout")), 2_500);
-      }),
-    ]);
-    if (auth && !auth.error && auth.data.user) return auth.data.user;
-  } catch {
-    /* fall through to JWT payload */
-  }
+  // Never call Auth getUser here: when GoTrue is degraded it can wedge the
+  // isolate past Promise.race timers (150s IDLE_TIMEOUT). Decode the access
+  // token only — real-trade/real-wallet run with verify_jwt disabled and still
+  // require a non-expired authenticated JWT payload.
   return userFromAccessToken(token);
 }
 
@@ -112,28 +105,17 @@ export async function realTradingEnabled(
 ): Promise<boolean> {
   try {
     const { readFlag } = await import("./direct-money.ts");
-    const flag = await readFlag("REAL_TRADING_ENABLED");
+    const flag = await Promise.race([
+      readFlag("REAL_TRADING_ENABLED"),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_200)),
+    ]);
     if (flag != null) return flag;
   } catch (err) {
     console.error("trading.flag", err instanceof Error ? err.message : "error");
   }
-  try {
-    const result = await Promise.race([
-      admin
-        .from("feature_flags")
-        .select("value")
-        .eq("key", "REAL_TRADING_ENABLED")
-        .maybeSingle(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_500)),
-    ]);
-    // Timeout / indeterminate: fail open so flaky PostgREST does not pause live trading.
-    if (result == null) return true;
-    if (result.error) return true;
-    if (result.data == null) return true;
-    return result.data.value === true;
-  } catch {
-    return true;
-  }
+  // Skip PostgREST — fail open so degraded API does not pause live trading.
+  void admin;
+  return true;
 }
 
 type Pending = {
@@ -166,24 +148,50 @@ export class DerivSession {
     ws.onclose = () => this.failAll(new Error("Deriv socket closed"));
   }
 
-  static open(): Promise<DerivSession> {
+  private static openUrl(url: string): Promise<DerivSession> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(DERIV_WS_URL);
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(url);
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error("Deriv connect failed"));
+        return;
+      }
       const timer = setTimeout(() => {
-        reject(new Error("Deriv connect timeout"));
-        try {
-          ws.close();
-        } catch {}
+        finish(() => {
+          reject(new Error("Deriv connect timeout"));
+          try {
+            ws.close();
+          } catch {}
+        });
       }, CONNECT_TIMEOUT_MS);
       ws.onopen = () => {
         clearTimeout(timer);
-        resolve(new DerivSession(ws));
+        finish(() => resolve(new DerivSession(ws)));
       };
       ws.onerror = () => {
         clearTimeout(timer);
-        reject(new Error("Deriv connect failed"));
+        finish(() => reject(new Error("Deriv connect failed")));
       };
     });
+  }
+
+  static async open(): Promise<DerivSession> {
+    let last: unknown = null;
+    for (const url of DERIV_WS_URLS) {
+      try {
+        return await DerivSession.openUrl(url);
+      } catch (err) {
+        last = err;
+      }
+    }
+    throw last instanceof Error ? last : new Error("Deriv connect failed");
   }
 
   request(payload: Record<string, unknown>): Promise<Record<string, unknown>> {

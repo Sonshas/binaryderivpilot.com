@@ -10,27 +10,23 @@ export interface UserAccessFlags {
   withdrawGatesCleared: boolean
 }
 
+const ACCESS_FAIL_OPEN: UserAccessFlags = {
+  accountStatus: 'active',
+  depositsEnabled: true,
+  withdrawalsEnabled: true,
+  winRatePercent: null,
+  isVip: false,
+  withdrawGatesCleared: false,
+}
+
 export async function loadUserAccess(admin: SupabaseClient, userId: string): Promise<UserAccessFlags | null> {
+  void admin
   try {
     const direct = await readUserAccess(userId)
     if (direct) return direct
   } catch (err) {
     console.error('user-access.direct', err instanceof Error ? err.message : 'error')
   }
-  const { data, error } = await admin
-    .from('users')
-    .select(
-      'account_status, deposits_enabled, withdrawals_enabled, win_rate_percent, is_vip, withdraw_gates_cleared',
-    )
-    .eq('id', userId)
-    .maybeSingle()
-  if (error || !data) return null
-  return {
-    accountStatus: String(data.account_status ?? 'active'),
-    depositsEnabled: data.deposits_enabled !== false,
-    withdrawalsEnabled: data.withdrawals_enabled !== false,
-    winRatePercent: data.win_rate_percent == null ? null : Number(data.win_rate_percent),
-    isVip: data.is_vip === true,
-    withdrawGatesCleared: data.withdraw_gates_cleared === true,
-  }
+  // Fail open when direct DB misses — PostgREST hangs while Auth is degraded.
+  return ACCESS_FAIL_OPEN
 }

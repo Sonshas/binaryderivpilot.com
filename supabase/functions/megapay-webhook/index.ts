@@ -9,6 +9,7 @@ import {
   isOmtReference,
   type WebhookFields,
 } from '../_shared/megapay.ts'
+import { findMegapayDeposit, insertWebhookEvent, markWebhookProcessed, setDepositProviderReference } from '../_shared/direct-money.ts'
 import {
   DEPOSIT_COLUMNS,
   adminClient,
@@ -34,6 +35,15 @@ function ok(body: Record<string, unknown> = { status: 'received' }) {
 }
 
 async function findOurDeposit(admin: SupabaseClient, fields: WebhookFields): Promise<DepositRow | null> {
+  try {
+    const row = await findMegapayDeposit({
+      transactionId: fields.transactionId,
+      reference: isOmtReference(fields.reference) ? fields.reference!.trim().toUpperCase() : null,
+    })
+    return (row as DepositRow | null) ?? null
+  } catch (err) {
+    console.error('megapay-webhook.find', err instanceof Error ? err.message : 'error')
+  }
   if (fields.transactionId) {
     const { data } = await admin
       .from('deposits')
@@ -64,7 +74,11 @@ async function processOurs(admin: SupabaseClient, cfg: ServerConfig, eventId: st
       const status = await transactionStatus(creds, fields.transactionId)
       const verified = classifyMegapayStatus(status.body)
       if (verified.reference?.toUpperCase() === String(deposit.details?.reference)) {
-        await admin.from('deposits').update({ provider_reference: fields.transactionId }).eq('id', deposit.id).is('provider_reference', null)
+        try {
+          await setDepositProviderReference(deposit.id, fields.transactionId)
+        } catch (err) {
+          console.error('megapay-webhook.reference', err instanceof Error ? err.message : 'error')
+        }
         deposit = await loadDeposit(admin, deposit.id)
       } else {
         result = 'reference_not_verified'
@@ -78,7 +92,12 @@ async function processOurs(admin: SupabaseClient, cfg: ServerConfig, eventId: st
   } catch (err) {
     result = `error: ${String(err).slice(0, 200)}`
   }
-  await admin.from('megapay_webhook_events').update({ processed: true, process_result: result }).eq('id', eventId)
+  try {
+    await markWebhookProcessed(eventId, result)
+  } catch (err) {
+    console.error('megapay-webhook.processed', err instanceof Error ? err.message : 'error')
+    await admin.from('megapay_webhook_events').update({ processed: true, process_result: result }).eq('id', eventId)
+  }
 }
 
 async function forwardEvent(admin: SupabaseClient, cfg: ServerConfig, event: { id: string; raw_body: string; content_type: string | null }) {
@@ -150,26 +169,27 @@ Deno.serve(async (req) => {
   const route = decideWebhookRoute(payload, fields, ours != null)
   const contentType = req.headers.get('content-type')
 
-  const { data: event, error } = await admin
-    .from('megapay_webhook_events')
-    .insert({
+  let event: { id: string } | null = null
+  try {
+    const id = await insertWebhookEvent({
       payload: isJsonObject(payload) ? payload : null,
-      raw_body: rawBody,
-      content_type: contentType,
+      rawBody,
+      contentType,
       reference: fields.reference,
-      transaction_id: fields.transactionId,
-      routed_to: route,
+      transactionId: fields.transactionId,
+      routedTo: route,
       attempts: route === 'vast' ? 1 : 0,
-      last_attempt_at: route === 'vast' ? new Date().toISOString() : null,
+      lastAttemptAt: route === 'vast' ? new Date().toISOString() : null,
       processed: route === 'unknown',
-      process_result: route === 'unknown' ? (rawBody.trim() ? 'not_json_object' : 'empty_body') : null,
+      processResult: route === 'unknown' ? (rawBody.trim() ? 'not_json_object' : 'empty_body') : null,
     })
-    .select('id')
-    .single()
-  if (error || !event) {
-    await logEdgeError(admin, 'deposits', 'megapay-webhook.insert', error ?? 'missing event', {
-      code: error?.code,
-    })
+    if (id) event = { id }
+  } catch (err) {
+    console.error('megapay-webhook.insert', err instanceof Error ? err.message : 'error')
+  }
+  if (!event) {
+    const error = new Error('webhook insert failed')
+    await logEdgeError(admin, 'deposits', 'megapay-webhook.insert', error, {})
     if (route === 'vast') {
       await fetch(cfg.vastWebhookUrl, {
         method: 'POST',

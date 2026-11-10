@@ -41,11 +41,12 @@ function timeoutMsFor(url: string): number {
   if (url.includes('/auth/v1/user')) return 2_500
   if (url.includes('/auth/v1/token?grant_type=refresh_token')) return 3_000
   // Allow slow GoTrue (often 10–16s when degraded) without aborting a valid grant.
-  if (url.includes('/auth/v1/token?grant_type=password')) return 22_000
+  if (url.includes('/auth/v1/token?grant_type=password')) return 16_000
   // REAL place/settle must reach Deriv + Postgres; under 30s aborted valid tickets.
   if (url.includes('/functions/v1/real-trade')) return 35_000
-  if (url.includes('/functions/v1/admin-dashboard')) return 22_000
-  if (url.includes('/functions/v1/admin-users')) return 22_000
+  if (url.includes('/functions/v1/admin-dashboard')) return 35_000
+  if (url.includes('/functions/v1/admin-users')) return 35_000
+  if (url.includes('/functions/v1/login-phone')) return 8_000
   if (url.includes('/functions/v1/')) return 12_000
   if (url.includes('/auth/v1/')) return 8_000
   return 10_000
@@ -114,7 +115,10 @@ export function dataApiFetch(input: RequestInfo | URL, init?: RequestInit): Prom
         return res
       },
       (err: unknown) => {
-        if (url.includes('/rest/v1/')) restPausedUntil = Date.now() + 60_000
+        if (url.includes('/rest/v1/')) {
+          restPausedUntil = Date.now() + 60_000
+          scheduleRestProbe()
+        }
         throw err
       },
     )
@@ -124,25 +128,108 @@ export function dataApiFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 export function getSupabase(): SupabaseClient<Database> | null {
   if (!isSupabaseConfigured) return null
   if (!client) {
-    scheduleRestProbe()
     client = createClient<Database>(supabaseUrl, supabaseKey, {
       auth: {
         persistSession: true,
-        autoRefreshToken: true,
+        // GoTrue's automatic refresh tick, on every open tab, holds a database
+        // connection until the query finishes. When PostgREST is slow those
+        // sessions pile up and login plus admin stop answering. Refresh once,
+        // ourselves, only when the access token is about to expire.
+        autoRefreshToken: false,
         detectSessionInUrl: true,
       },
       global: { fetch: dataApiFetch },
     })
+    startQuietRefresh()
   }
   return client
 }
 
+export function supabaseApiAuth(): { url: string; key: string } | null {
+  if (!supabaseUrl || !supabaseKey) return null
+  return { url: supabaseUrl, key: supabaseKey }
+}
+
+let refreshTimer: ReturnType<typeof setTimeout> | undefined
+let refreshInFlight = false
+let refreshNotBefore = 0
+
+function startQuietRefresh() {
+  if (refreshTimer !== undefined || !supabaseUrl || !supabaseKey) return
+  const tick = () => {
+    refreshTimer = setTimeout(tick, 60_000)
+    void refreshStoredSessionOnce()
+  }
+  refreshTimer = setTimeout(tick, 20_000)
+}
+
+async function refreshStoredSessionOnce(): Promise<void> {
+  if (refreshInFlight || Date.now() < refreshNotBefore) return
+  const parsed = readStoredAuthPayload()
+  const refreshToken = parsed?.refresh_token ?? parsed?.currentSession?.refresh_token
+  const expiresAt = parsed?.expires_at ?? parsed?.currentSession?.expires_at
+  if (!refreshToken || typeof expiresAt !== 'number') return
+  if (expiresAt * 1000 - Date.now() > 3 * 60_000) return
+  refreshInFlight = true
+  try {
+    const response = await dataApiFetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+    if (!response.ok) {
+      refreshNotBefore = Date.now() + 3 * 60_000
+      return
+    }
+    const body = (await response.json()) as {
+      access_token?: string
+      refresh_token?: string
+      expires_in?: number
+      expires_at?: number
+      token_type?: string
+      user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
+    }
+    if (!body.access_token || !body.refresh_token) {
+      refreshNotBefore = Date.now() + 3 * 60_000
+      return
+    }
+    const host = new URL(supabaseUrl).hostname
+    const ref = host.split('.')[0]
+    if (!ref) return
+    const expiresAtNext =
+      typeof body.expires_at === 'number'
+        ? body.expires_at
+        : Math.floor(Date.now() / 1000) + (Number(body.expires_in) || 3600)
+    localStorage.setItem(
+      `sb-${ref}-auth-token`,
+      JSON.stringify({
+        access_token: body.access_token,
+        refresh_token: body.refresh_token,
+        expires_at: expiresAtNext,
+        expires_in: Number(body.expires_in) || 3600,
+        token_type: body.token_type ?? 'bearer',
+        user: body.user ?? parsed?.user ?? parsed?.currentSession?.user,
+      }),
+    )
+  } catch {
+    refreshNotBefore = Date.now() + 3 * 60_000
+  } finally {
+    refreshInFlight = false
+  }
+}
+
 function readStoredAuthPayload(): {
   access_token?: string
+  refresh_token?: string
   expires_at?: number
   user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
   currentSession?: {
     access_token?: string
+    refresh_token?: string
     expires_at?: number
     user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
   }
@@ -156,10 +243,12 @@ function readStoredAuthPayload(): {
     if (!raw) return null
     return JSON.parse(raw) as {
       access_token?: string
+      refresh_token?: string
       expires_at?: number
       user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
       currentSession?: {
         access_token?: string
+        refresh_token?: string
         expires_at?: number
         user?: { id?: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
       }

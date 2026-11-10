@@ -79,6 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getSession()
       .then((result) => {
         if (cancelled) return
+        const peeked = authService.peekSession()
+        if (!result.data && peeked) {
+          setUser(peeked)
+          setMessage(`Session active for ${peeked.email}.`)
+          return
+        }
         setUser(result.data)
         setMessage(result.message)
       })
@@ -94,6 +100,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
     const unsubscribe = authService.onAuthStateChange((next) => {
       if (cancelled) return
+      if (!next) {
+        const peeked = authService.peekSession()
+        if (peeked) {
+          setUser(peeked)
+          setLoading(false)
+          setMessage(`Session active for ${peeked.email}.`)
+          return
+        }
+      }
       setUser(next)
       setLoading(false)
       setMessage(next ? `Session active for ${next.email}.` : 'No active session.')

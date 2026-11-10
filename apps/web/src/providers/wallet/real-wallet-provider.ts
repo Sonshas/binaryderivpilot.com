@@ -10,7 +10,13 @@ import { loadDemoSession } from "@/lib/demo-session";
 import { nowIso } from "@/lib/ids";
 import { loadRealBook, localBooksActive } from "@/lib/real-books";
 import { reportBackendIssue } from "@/services/system-issues";
-import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
+import {
+  getSupabase,
+  isSupabaseConfigured,
+  peekStoredAccessToken,
+  peekStoredAuthUser,
+  supabaseApiAuth,
+} from "@/lib/supabase";
 import { REAL_INTEGRATION } from "@/providers/config";
 import { notConnected, okReal } from "@/providers/results";
 import type {
@@ -282,6 +288,60 @@ function mapTxStatus(status: string): TransactionStatus {
   return "PENDING";
 }
 
+let ownMoneyFlight: {
+  userId: string;
+  promise: Promise<MoneyActivity | null>;
+} | null = null;
+
+/** The signed-in user's deposits, withdrawals, and transactions. Skips Auth getSession. */
+function loadOwnMoney(userId: string): Promise<MoneyActivity | null> {
+  if (ownMoneyFlight?.userId === userId) return ownMoneyFlight.promise;
+  const promise = (async () => {
+    const api = supabaseApiAuth();
+    const token = peekStoredAccessToken();
+    if (!api || !token) return null;
+    const headers = {
+      apikey: api.key,
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    };
+    const scope = `user_id=eq.${encodeURIComponent(userId)}&account_mode=eq.real&is_simulated=eq.false`;
+    const table = async (name: string, select: string) => {
+      const response = await fetch(
+        `${api.url}/rest/v1/${name}?select=${select}&${scope}&order=created_at.desc&limit=100`,
+        { headers, signal: AbortSignal.timeout(8_000) },
+      );
+      if (!response.ok) throw new Error(String(response.status));
+      const rows = (await response.json()) as unknown;
+      if (!Array.isArray(rows)) throw new Error("shape");
+      return rows as Record<string, unknown>[];
+    };
+    try {
+      const [deposits, withdrawals, transactions] = await Promise.all([
+        table(
+          "deposits",
+          "id,user_id,account_id,account_mode,wallet_id,amount,currency,method,status,provider,details,is_simulated,created_at,updated_at",
+        ),
+        table(
+          "withdrawals",
+          "id,user_id,account_id,account_mode,wallet_id,amount,currency,destination,status,is_simulated,created_at,updated_at,provider,reference,amount_kes,fee_kes,net_kes,msisdn,mpesa_receipt,failure_reason,processing_at,completed_at,failed_at",
+        ),
+        table(
+          "transactions",
+          "id,user_id,account_id,account_mode,wallet_id,type,amount,currency,status,reference,note,is_simulated,created_at,updated_at",
+        ),
+      ]);
+      return { deposits, withdrawals, transactions };
+    } catch {
+      return null;
+    }
+  })();
+  ownMoneyFlight = { userId, promise };
+  return promise.finally(() => {
+    if (ownMoneyFlight?.promise === promise) ownMoneyFlight = null;
+  });
+}
+
 function mapTxType(type: string): TransactionType {
   const allowed: TransactionType[] = [
     "deposit",
@@ -390,10 +450,8 @@ export const realWalletProvider: WalletProvider = {
       );
     }
     const client = getSupabase()!;
-    const {
-      data: { session },
-    } = await client.auth.getSession();
-    if (!session?.user) {
+    const userId = peekStoredAuthUser()?.id ?? "";
+    if (!userId) {
       const email = localRealEmail();
       if (email && localBooksActive())
         return okReal(
@@ -406,7 +464,8 @@ export const realWalletProvider: WalletProvider = {
       );
     }
 
-    const activity = await loadMoneyActivity(client, session.user.id);
+    const own = await loadOwnMoney(userId);
+    const activity = own?.transactions ? own : await loadMoneyActivity(client, userId);
     if (activity?.transactions) {
       const rows: Transaction[] = activity.transactions.map((row) => ({
         id: String(row.id),
@@ -437,7 +496,7 @@ export const realWalletProvider: WalletProvider = {
       .select(
         "id, user_id, account_id, account_mode, wallet_id, type, amount, currency, status, reference, note, is_simulated, created_at, updated_at",
       )
-      .eq("user_id", session.user.id)
+      .eq("user_id", userId)
       .eq("account_mode", "real")
       .eq("is_simulated", false)
       .order("created_at", { ascending: false })
@@ -484,17 +543,16 @@ export const realWalletProvider: WalletProvider = {
       );
     }
     const client = getSupabase()!;
-    const {
-      data: { session },
-    } = await client.auth.getSession();
-    if (!session?.user) {
+    const userId = peekStoredAuthUser()?.id ?? "";
+    if (!userId) {
       return notConnected(
         [],
         `Sign in to load ${realAccountShort()} deposits.`,
       );
     }
 
-    const activity = await loadMoneyActivity(client, session.user.id);
+    const own = await loadOwnMoney(userId);
+    const activity = own?.deposits ? own : await loadMoneyActivity(client, userId);
     if (activity?.deposits) {
       const rows: Deposit[] = activity.deposits.map((row) => {
         const details = (
@@ -536,7 +594,7 @@ export const realWalletProvider: WalletProvider = {
       .select(
         "id, user_id, account_id, account_mode, wallet_id, amount, currency, method, status, provider, details, is_simulated, created_at, updated_at",
       )
-      .eq("user_id", session.user.id)
+      .eq("user_id", userId)
       .eq("account_mode", "real")
       .eq("is_simulated", false)
       .order("created_at", { ascending: false })
@@ -599,17 +657,16 @@ export const realWalletProvider: WalletProvider = {
       );
     }
     const client = getSupabase()!;
-    const {
-      data: { session },
-    } = await client.auth.getSession();
-    if (!session?.user) {
+    const userId = peekStoredAuthUser()?.id ?? "";
+    if (!userId) {
       return notConnected(
         [],
         `Sign in to load ${realAccountShort()} withdrawals.`,
       );
     }
 
-    const activity = await loadMoneyActivity(client, session.user.id);
+    const own = await loadOwnMoney(userId);
+    const activity = own?.withdrawals ? own : await loadMoneyActivity(client, userId);
     if (activity?.withdrawals) {
       const rows: Withdrawal[] = activity.withdrawals.map((row) => ({
         id: String(row.id),
@@ -650,7 +707,7 @@ export const realWalletProvider: WalletProvider = {
       .select(
         "id, user_id, account_id, account_mode, wallet_id, amount, currency, destination, status, is_simulated, created_at, updated_at, provider, reference, amount_kes, fee_kes, net_kes, msisdn, mpesa_receipt, failure_reason, processing_at, completed_at, failed_at",
       )
-      .eq("user_id", session.user.id)
+      .eq("user_id", userId)
       .eq("account_mode", "real")
       .eq("is_simulated", false)
       .order("created_at", { ascending: false })

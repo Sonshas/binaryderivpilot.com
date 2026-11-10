@@ -1,5 +1,5 @@
 import type { AuthUserSource, DepositSource, PublicUserSource } from "./admin-dashboard.ts";
-import { withFreshDb } from "./direct-db.ts";
+import { serviceRestGet, withFreshDb } from "./direct-db.ts";
 
 type SqlRow = Record<string, unknown>;
 
@@ -74,68 +74,96 @@ function mapDeposit(row: SqlRow): DepositSource {
   };
 }
 
+function rowsFromRest(value: unknown): SqlRow[] {
+  if (!Array.isArray(value)) throw new Error("rest shape");
+  return value.filter((row) => row && typeof row === "object") as SqlRow[];
+}
+
+function sourcesFromRows(depositRows: SqlRow[], profileRows: SqlRow[]) {
+  const profiles = profileRows.map(mapProfile).filter((row) => row.id);
+  const authUsers = profileRows.map((row) =>
+    mapAuth({
+      id: row.id,
+      email: row.email,
+      created_at: row.created_at,
+      app_role: row.role,
+    }),
+  ).filter((row) => row.id);
+  return {
+    authUsers,
+    profiles,
+    deposits: depositRows.map(mapDeposit).filter((row) => row.id && row.user_id),
+  };
+}
+
+/** Data API overview. Throws when deposits cannot be read — never an empty stand-in. */
+async function loadAdminDashboardSourcesRest() {
+  // Lean columns only — full `details` blobs OOMed the Edge worker.
+  const restMs = 22_000;
+  const [depositRows, profileRows] = await Promise.all([
+    serviceRestGet(
+      "deposits?select=id,user_id,amount,currency,status,provider,method,mpesa_receipt,callback_amount_kes,created_at,updated_at,is_simulated,account_mode&account_mode=eq.real&is_simulated=eq.false&method=eq.mpesa&order=created_at.desc&limit=400",
+      restMs,
+    ).then(rowsFromRest),
+    serviceRestGet(
+      "users?select=id,email,role,created_at&order=created_at.desc&limit=800",
+      restMs,
+    ).then(rowsFromRest),
+  ]);
+  return sourcesFromRows(depositRows, profileRows);
+}
+
 /**
  * Dashboard reads for /admin and /admin/earnings.
- * Same withFreshDb path as /admin/users (proven on this project’s pooler).
+ * Lean Data API first — pooler writes from Edge often close
+ * (CONNECTION_CLOSED on 6543) and full `details` blobs OOMed the worker.
  */
 export async function loadAdminDashboardSources(): Promise<{
   authUsers: AuthUserSource[];
   profiles: PublicUserSource[];
   deposits: DepositSource[];
 }> {
+  try {
+    return await loadAdminDashboardSourcesRest();
+  } catch (restErr) {
+    console.error(
+      "admin-dashboard.rest",
+      restErr instanceof Error ? restErr.message : "error",
+    );
+  }
+  const overviewDepositCap = Math.min(DEPOSIT_CAP, 400);
+  const overviewUserCap = Math.min(USER_CAP, 800);
   return await withFreshDb(async (sql) => {
+    const depositRows = await sql<SqlRow[]>`
+      select id::text as id,
+             user_id::text as user_id,
+             amount,
+             currency,
+             status,
+             provider,
+             method,
+             mpesa_receipt,
+             callback_amount_kes,
+             null::jsonb as details,
+             created_at,
+             updated_at,
+             is_simulated,
+             account_mode
+        from public.deposits
+       where account_mode = 'real'
+         and is_simulated = false
+         and lower(method) = 'mpesa'
+       order by created_at desc
+       limit ${overviewDepositCap}
+    `;
     const profileRows = await sql<SqlRow[]>`
       select id::text as id, email, role, created_at
         from public.users
        order by created_at desc nulls last
-       limit ${USER_CAP}
+       limit ${overviewUserCap}
     `;
-    let depositRows: SqlRow[] = [];
-    try {
-      depositRows = await sql<SqlRow[]>`
-        select id::text as id,
-               user_id::text as user_id,
-               amount,
-               currency,
-               status,
-               provider,
-               method,
-               mpesa_receipt,
-               callback_amount_kes,
-               details,
-               created_at,
-               updated_at,
-               is_simulated,
-               account_mode
-          from public.deposits
-         where account_mode = 'real'
-           and is_simulated = false
-           and method = 'mpesa'
-         order by created_at desc
-         limit ${DEPOSIT_CAP}
-      `;
-    } catch (depErr) {
-      console.error(
-        "admin-dashboard.deposits",
-        depErr instanceof Error ? depErr.message.replace(/postgres(?:ql)?:\/\/\S+/gi, "[db]").slice(0, 160) : "error",
-      );
-      depositRows = [];
-    }
-    const profiles = profileRows.map(mapProfile).filter((row) => row.id);
-    const authUsers = profileRows.map((row) =>
-      mapAuth({
-        id: row.id,
-        email: row.email,
-        created_at: row.created_at,
-        app_role: row.role,
-      }),
-    ).filter((row) => row.id);
-    return {
-      authUsers,
-      profiles,
-      deposits: depositRows.map(mapDeposit).filter((row) => row.id && row.user_id),
-    };
-  }, 4_500);
+    return sourcesFromRows(depositRows, profileRows);
+  }, 8_000);
 }
 
 export type AdminUserListSqlRow = {

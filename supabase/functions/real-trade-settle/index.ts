@@ -36,13 +36,20 @@ async function loadDueTrades(input: {
          where account_mode = 'real'
            and is_simulated = false
            and status = 'open'
-           and expires_at <= now()
+           and (
+             expires_at <= now()
+             or (
+               duration_ticks is not null
+               and tick_anchor_epoch is not null
+               and tick_anchor_epoch <= extract(epoch from now())::bigint
+             )
+           )
            and (${userId}::uuid is null or user_id = ${userId}::uuid)
            and (${tradeId}::uuid is null or id = ${tradeId}::uuid)
          order by expires_at asc
          limit ${limit}
       `,
-      4_000,
+      2_000,
     )
     return rows
   } catch (err) {
@@ -50,38 +57,9 @@ async function loadDueTrades(input: {
       'settle.load.direct',
       err instanceof Error ? err.message : 'error',
     )
+    // Skip hung PostgREST — return empty so settle can no-op instead of 500.
+    return []
   }
-
-  let query = adminClient()
-    .from('trades')
-    .select(
-      'id, user_id, symbol, contract_type, contract_option, selected_digit, barrier, stake, expires_at, duration_ticks, tick_anchor_epoch',
-    )
-    .eq('account_mode', 'real')
-    .eq('is_simulated', false)
-    .eq('status', 'open')
-    .lte('expires_at', new Date().toISOString())
-    .order('expires_at', { ascending: true })
-    .limit(limit)
-  if (userId) query = query.eq('user_id', userId)
-  if (tradeId) query = query.eq('id', tradeId)
-
-  const raced = await Promise.race([
-    query,
-    new Promise<{ data: null; error: { message: string; code: string } }>(
-      (resolve) =>
-        setTimeout(
-          () =>
-            resolve({
-              data: null,
-              error: { message: 'timeout', code: '57014' },
-            }),
-          4_000,
-        ),
-    ),
-  ])
-  if (raced.error) throw raced.error
-  return (raced.data ?? []) as OpenTradeRow[]
 }
 
 async function readBody(req: Request): Promise<Record<string, unknown>> {

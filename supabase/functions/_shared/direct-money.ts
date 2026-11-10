@@ -1,4 +1,4 @@
-import { runDirect } from "./direct-db.ts";
+import { runDirect, serviceRestGet, serviceRestPost, withFreshDb } from "./direct-db.ts";
 
 type Row = Record<string, unknown>;
 
@@ -107,13 +107,51 @@ export async function hasSettledTrade(userId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+function restRows(value: unknown): Row[] {
+  if (!Array.isArray(value)) throw new Error("rest shape");
+  return value.filter((row) => row && typeof row === "object") as Row[];
+}
+
+const ACTIVITY_DATES = ["created_at", "updated_at", "processing_at", "completed_at", "failed_at"];
+
+/** Signed-in user's money lists via the Data API. Throws if deposits cannot be read. */
+export async function readActivityViaRest(userId: string): Promise<{
+  wallet: Row | null;
+  deposits: Row[];
+  withdrawals: Row[];
+  transactions: Row[];
+}> {
+  const id = encodeURIComponent(userId);
+  const scope = `user_id=eq.${id}&account_mode=eq.real&is_simulated=eq.false`;
+  const [wallets, deposits, withdrawals, transactions] = await Promise.all([
+    serviceRestGet(
+      `wallets?select=id,user_id,account_id,account_mode,currency,balance,available_balance,locked_balance,status,is_simulated,created_at,updated_at&${scope}&limit=1`,
+    ).then(restRows),
+    serviceRestGet(
+      `deposits?select=id,user_id,account_id,account_mode,wallet_id,amount,currency,method,status,provider,details,is_simulated,created_at,updated_at&${scope}&order=created_at.desc&limit=100`,
+    ).then(restRows),
+    serviceRestGet(
+      `withdrawals?select=id,user_id,account_id,account_mode,wallet_id,amount,currency,destination,status,is_simulated,created_at,updated_at,provider,reference,amount_kes,fee_kes,net_kes,msisdn,mpesa_receipt,failure_reason,processing_at,completed_at,failed_at&${scope}&order=created_at.desc&limit=100`,
+    ).then(restRows),
+    serviceRestGet(
+      `transactions?select=id,user_id,account_id,account_mode,wallet_id,type,amount,currency,status,reference,note,is_simulated,created_at,updated_at&${scope}&order=created_at.desc&limit=100`,
+    ).then(restRows),
+  ]);
+  return {
+    wallet: wallets[0] ? rowOut(wallets[0], ACTIVITY_DATES) : null,
+    deposits: deposits.map((row) => rowOut(row, ACTIVITY_DATES)),
+    withdrawals: withdrawals.map((row) => rowOut(row, ACTIVITY_DATES)),
+    transactions: transactions.map((row) => rowOut(row, ACTIVITY_DATES)),
+  };
+}
+
 export async function readActivity(userId: string): Promise<{
   wallet: Row | null;
   deposits: Row[];
   withdrawals: Row[];
   transactions: Row[];
 }> {
-  return await runDirect(async (sql) => {
+  return await withFreshDb(async (sql) => {
     const [wallets, deposits, withdrawals, transactions] = await Promise.all([
       sql<Row[]>`
         select id, user_id, account_id, account_mode, currency, balance,
@@ -165,7 +203,7 @@ export async function readActivity(userId: string): Promise<{
       withdrawals: withdrawals.map((row) => rowOut(row, dates)),
       transactions: transactions.map((row) => rowOut(row, dates)),
     };
-  }, 6000);
+  }, 8_000);
 }
 
 export async function saveMegapayCursor(accountId: string): Promise<void> {
@@ -292,10 +330,18 @@ export async function callPlaceRealTrade(
 ): Promise<{ trade_id?: string; already?: boolean } | null> {
   const digit = input.selectedDigit;
   const barrier = input.barrier;
+  const parse = (rows: { result?: unknown }[]) => {
+    const raw = rows[0]?.result;
+    if (raw == null) return null;
+    const value = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!value || typeof value !== "object") return null;
+    return value as { trade_id?: string; already?: boolean };
+  };
+  // Place needs a longer budget than flag reads — wallet locks can be slow.
   if (input.durationTicks != null) {
     const rows = await runDirect(
       (sql) =>
-        sql<{ result: { trade_id?: string; already?: boolean } }[]>`
+        sql<{ result: unknown }[]>`
           select public.place_real_tick_trade(
             ${input.userId}::uuid,
             ${input.symbol},
@@ -314,11 +360,11 @@ export async function callPlaceRealTrade(
         `,
       8_000,
     );
-    return rows[0]?.result ?? null;
+    return parse(rows);
   }
   const rows = await runDirect(
     (sql) =>
-      sql<{ result: { trade_id?: string; already?: boolean } }[]>`
+      sql<{ result: unknown }[]>`
         select public.place_real_trade(
           ${input.userId}::uuid,
           ${input.symbol},
@@ -337,7 +383,7 @@ export async function callPlaceRealTrade(
       `,
     8_000,
   );
-  return rows[0]?.result ?? null;
+  return parse(rows);
 }
 
 export async function loadWithdrawalRow(id: string): Promise<Row | null> {
@@ -431,29 +477,20 @@ export async function findMegapayDeposit(input: {
   transactionId: string | null;
   reference: string | null;
 }): Promise<Row | null> {
-  return await runDirect(async (sql) => {
-    if (input.transactionId) {
-      const byId = await sql<Row[]>`
-        select id, user_id, amount, currency, status, provider, provider_reference, details, created_at
-          from public.deposits
-         where provider = 'megapay'
-           and provider_reference = ${input.transactionId}
-         limit 1
-      `;
-      if (byId[0]) return rowOut(byId[0], ["created_at"]);
-    }
-    if (input.reference) {
-      const byRef = await sql<Row[]>`
-        select id, user_id, amount, currency, status, provider, provider_reference, details, created_at
-          from public.deposits
-         where provider = 'megapay'
-           and upper(details->>'reference') = ${input.reference}
-         limit 1
-      `;
-      if (byRef[0]) return rowOut(byRef[0], ["created_at"]);
-    }
-    return null;
-  }, 4000);
+  // Data API only during webhook storms — never open a pooler socket here.
+  if (input.transactionId) {
+    const rows = await serviceRestGet(
+      `deposits?select=id,user_id,amount,currency,status,provider,provider_reference,details,created_at&provider=eq.megapay&provider_reference=eq.${encodeURIComponent(input.transactionId)}&limit=1`,
+    );
+    if (Array.isArray(rows) && rows[0]) return rowOut(rows[0] as Row, ["created_at"]);
+  }
+  if (input.reference) {
+    const rows = await serviceRestGet(
+      `deposits?select=id,user_id,amount,currency,status,provider,provider_reference,details,created_at&provider=eq.megapay&details->>reference=eq.${encodeURIComponent(input.reference)}&limit=1`,
+    );
+    if (Array.isArray(rows) && rows[0]) return rowOut(rows[0] as Row, ["created_at"]);
+  }
+  return null;
 }
 
 export async function insertWebhookEvent(input: {
@@ -468,27 +505,25 @@ export async function insertWebhookEvent(input: {
   processed: boolean;
   processResult: string | null;
 }): Promise<string | null> {
-  const rows = await runDirect(
-    (sql) => sql<Row[]>`
-      insert into public.megapay_webhook_events (
-        payload, raw_body, content_type, reference, transaction_id, routed_to,
-        attempts, last_attempt_at, processed, process_result
-      ) values (
-        ${input.payload ? sql.json(input.payload) : null},
-        ${input.rawBody},
-        ${input.contentType},
-        ${input.reference},
-        ${input.transactionId},
-        ${input.routedTo},
-        ${input.attempts},
-        ${input.lastAttemptAt}::timestamptz,
-        ${input.processed},
-        ${input.processResult}
-      )
-      returning id
-    `,
-    5000,
+  // PostgREST only. A pooler fallback per MegaPay callback refilled the
+  // connection cap and kept auth_admin at 0 so password login stayed broken.
+  const rows = await serviceRestPost(
+    "megapay_webhook_events",
+    {
+      payload: input.payload,
+      raw_body: input.rawBody,
+      content_type: input.contentType,
+      reference: input.reference,
+      transaction_id: input.transactionId,
+      routed_to: input.routedTo,
+      attempts: input.attempts,
+      last_attempt_at: input.lastAttemptAt,
+      processed: input.processed,
+      process_result: input.processResult,
+    },
+    { prefer: "return=representation", timeoutMs: 4_000 },
   );
-  const id = rows[0]?.id;
+  const row = Array.isArray(rows) ? rows[0] : null;
+  const id = row && typeof row === "object" ? (row as Row).id : null;
   return id == null ? null : String(id);
 }

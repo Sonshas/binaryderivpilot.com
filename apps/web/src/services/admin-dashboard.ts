@@ -1,11 +1,11 @@
-import { abortSignalAfter, raceWithTimeout } from '@/lib/abort-timeout'
-import { getSupabase } from '@/lib/supabase'
+import { raceWithTimeout } from '@/lib/abort-timeout'
+import { dataApiFetch, peekStoredAccessToken, supabaseApiAuth } from '@/lib/supabase'
 import type { Result } from '@/services/megapay'
-import { reportBackendIssue } from '@/services/system-issues'
 
 const FUNCTION = 'admin-dashboard'
 /** Direct SQL may fail over to PostgREST; keep under the Edge wall clock. */
-const LOAD_MS = 22_000
+/** Lean REST overview often needs 15–25s after PostgREST stalls. */
+const LOAD_MS = 35_000
 
 export interface DashboardUserRow {
   id: string
@@ -38,23 +38,6 @@ export interface AdminDashboard {
     collectedCount: number
     userCount: number
   }
-}
-
-function contextStatus(error: unknown): number | null {
-  const context = (error as { context?: Response } | null)?.context
-  return context && typeof context.status === 'number' ? context.status : null
-}
-
-async function functionError(error: unknown): Promise<string> {
-  const context = (error as { context?: Response } | null)?.context
-  if (context && typeof context.json === 'function') {
-    try {
-      const body = (await context.clone().json()) as { error?: string; message?: string }
-      if (body.error || body.message) return String(body.error ?? body.message)
-    } catch {
-    }
-  }
-  return 'Could not load the dashboard.'
 }
 
 function text(value: unknown): string | null {
@@ -105,59 +88,69 @@ function mapList(value: unknown, map: (raw: Record<string, unknown>) => Dashboar
   })
 }
 
+function mapDashboard(data: Record<string, unknown>): AdminDashboard {
+  const totals = data.totals && typeof data.totals === 'object' ? (data.totals as Record<string, unknown>) : {}
+  const users = Array.isArray(data.users)
+    ? data.users.flatMap((row) => {
+        if (!row || typeof row !== 'object') return []
+        const mapped = mapUser(row as Record<string, unknown>)
+        return mapped ? [mapped] : []
+      })
+    : []
+  return {
+    users,
+    collected: mapList(data.collected, mapDeposit),
+    other: mapList(data.other, mapDeposit),
+    totals: {
+      collectedUsd: money(totals.collected_usd),
+      collectedKes: money(totals.collected_kes),
+      collectedCount: Number(totals.collected_count ?? 0) || 0,
+      userCount: Number(totals.user_count ?? users.length) || users.length,
+    },
+  }
+}
+
+/** Bearer from local storage, so the dashboard does not wait on the Auth lock. */
+async function loadOverviewDirect(): Promise<Result<AdminDashboard> | null> {
+  const api = supabaseApiAuth()
+  const token = peekStoredAccessToken()
+  if (!api || !token) return null
+  let response: Response
+  try {
+    response = await raceWithTimeout(
+      dataApiFetch(`${api.url}/functions/v1/${FUNCTION}`, {
+        method: 'POST',
+        headers: {
+          apikey: api.key,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'overview' }),
+      }),
+      LOAD_MS,
+      'Could not load the dashboard.',
+    )
+  } catch {
+    return { ok: false, error: 'Could not load the dashboard.' }
+  }
+  let body: Record<string, unknown> = {}
+  try {
+    body = (await response.json()) as Record<string, unknown>
+  } catch {
+    return { ok: false, error: 'Could not load the dashboard.' }
+  }
+  if (!response.ok) {
+    return { ok: false, error: text(body.error) ?? text(body.message) ?? 'Could not load the dashboard.' }
+  }
+  return { ok: true, data: mapDashboard(body) }
+}
+
 export const adminDashboardService = {
   async load(): Promise<Result<AdminDashboard>> {
-    const client = getSupabase()
-    if (!client) return { ok: false, error: 'Dashboard is temporarily unavailable.' }
-    let data: Record<string, unknown> | null = null
-    let error: unknown = null
-    try {
-      const result = await raceWithTimeout(
-        client.functions.invoke<Record<string, unknown>>(FUNCTION, {
-          method: 'POST',
-          body: { action: 'overview' },
-          signal: abortSignalAfter(LOAD_MS),
-        }),
-        LOAD_MS,
-        'Could not load the dashboard.',
-      )
-      data = result.data
-      error = result.error
-    } catch (err) {
-      const message = err instanceof Error ? err.message : ''
-      if (!/timed out|timeout|could not load the dashboard/i.test(message)) {
-        reportBackendIssue('admin', 'admin-dashboard.overview', err)
-      }
-      return { ok: false, error: 'Could not load the dashboard.' }
-    }
-    if (error || !data) {
-      const message = await functionError(error)
-      const status = contextStatus(error)
-      if (status === 401 || status === 403) return { ok: false, error: message }
-      reportBackendIssue('admin', 'admin-dashboard.overview', error ?? new Error('Empty dashboard response'), status)
-      return { ok: false, error: message }
-    }
-    const totals = data.totals && typeof data.totals === 'object' ? (data.totals as Record<string, unknown>) : {}
-    const users = Array.isArray(data.users)
-      ? data.users.flatMap((row) => {
-          if (!row || typeof row !== 'object') return []
-          const mapped = mapUser(row as Record<string, unknown>)
-          return mapped ? [mapped] : []
-        })
-      : []
-    return {
-      ok: true,
-      data: {
-        users,
-        collected: mapList(data.collected, mapDeposit),
-        other: mapList(data.other, mapDeposit),
-        totals: {
-          collectedUsd: money(totals.collected_usd),
-          collectedKes: money(totals.collected_kes),
-          collectedCount: Number(totals.collected_count ?? 0) || 0,
-          userCount: Number(totals.user_count ?? users.length) || users.length,
-        },
-      },
-    }
+    // Bearer from local storage. functions.invoke waits on the Auth lock and
+    // getSession, which is the path that bounced /admin back to /login.
+    const direct = await loadOverviewDirect()
+    if (direct) return direct
+    return { ok: false, error: 'Sign in as an admin.' }
   },
 }

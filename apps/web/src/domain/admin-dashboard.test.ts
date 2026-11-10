@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import webSource from './admin-dashboard.ts?raw'
 import denoSource from '../../../../supabase/functions/_shared/admin-dashboard.ts?raw'
+import dashboardFn from '../../../../supabase/functions/admin-dashboard/index.ts?raw'
+import directAdmin from '../../../../supabase/functions/_shared/direct-admin.ts?raw'
+import realWalletFn from '../../../../supabase/functions/real-wallet/index.ts?raw'
 import withdrawServer from '../../../../supabase/functions/_shared/payments/withdraw-server.ts?raw'
 import {
   DASHBOARD_STAFF_ROLES,
@@ -152,5 +155,31 @@ describe('mergeJoinedUsers', () => {
     expect(users.map((user) => user.id)).toEqual(['new', 'old'])
     expect(users[0]).toMatchObject({ email: 'new@example.com', role: 'superadmin' })
     expect(users[1]).toMatchObject({ email: 'old@example.com', role: 'trader' })
+  })
+})
+
+describe('deposit reads are not replaced with an empty list', () => {
+  it('does not let the auth user directory win the overview with no deposits', () => {
+    expect(dashboardFn).not.toContain('loadDashboardViaAuthAdmin')
+    expect(dashboardFn).not.toContain('deposits: []')
+  })
+
+  it('does not treat a failed deposit query as zero money', () => {
+    expect(directAdmin).not.toContain('depositRows = []')
+  })
+
+  it('returns wallet activity instead of hardcoded empty deposits', () => {
+    expect(realWalletFn).toContain('readActivity')
+    expect(realWalletFn).toContain('readActivityViaRest')
+    expect(realWalletFn).not.toContain('deposits: []')
+  })
+
+  it('loads the admin overview from a lean Data API read before the pooler', () => {
+    const fn = directAdmin.slice(directAdmin.indexOf('export async function loadAdminDashboardSources'))
+    expect(fn).toContain('loadAdminDashboardSourcesRest')
+    expect(fn.indexOf('loadAdminDashboardSourcesRest')).toBeLessThan(fn.indexOf('withFreshDb'))
+    expect(fn).toContain('null::jsonb as details')
+    expect(directAdmin).toContain('deposits?select=')
+    expect(directAdmin).not.toContain('details,created_at,updated_at,is_simulated,account_mode&account_mode')
   })
 })

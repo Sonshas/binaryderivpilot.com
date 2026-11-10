@@ -97,11 +97,20 @@ function payoutRateForRpc(payoutPercent: number, canWin: boolean): number {
   return Math.round(payoutPercent * 100) / 10_000;
 }
 
-async function loadTradingFees(admin: ReturnType<typeof adminClient>) {
+const DEFAULT_FEES = {
+  stakeMin: REAL_STAKE_MIN,
+  stakeMax: REAL_STAKE_MAX,
+  maxOpen: REAL_MAX_OPEN_TRADES,
+  dailyLimit: null as number | null,
+  payoutPercent: 95.22,
+};
+
+async function loadTradingFees(_admin: ReturnType<typeof adminClient>) {
   try {
     const rows = await runDirect(
-      (sql) => sql<{ key: string; value: string }[]>`select key, value from public.trading_settings`,
-      3_000,
+      (sql) =>
+        sql<{ key: string; value: string }[]>`select key, value from public.trading_settings`,
+      1_200,
     );
     const map: SettingsMap = {};
     for (const row of rows) {
@@ -123,45 +132,20 @@ async function loadTradingFees(admin: ReturnType<typeof adminClient>) {
     };
   } catch (err) {
     console.error("trading.settings", err instanceof Error ? err.message : "error");
+    // Skip PostgREST — it hangs when Auth/API is degraded and pauses trading.
+    return { ...DEFAULT_FEES };
   }
-  const { data, error } = await admin
-    .from("trading_settings")
-    .select("key, value");
-  if (error)
-    await logEdgeError(admin, "trading", "trading_settings.load", error, {
-      code: error.code,
-    });
-  const map: SettingsMap = {};
-  for (const row of data ?? []) {
-    const key = String((row as { key?: unknown }).key ?? "");
-    if (!key) continue;
-    map[key] = String((row as { value?: unknown }).value ?? "");
-  }
-  const fees = tradingFeesFromMap(map);
-  const payoutRaw = Number(map.TRADE_PAYOUT_PERCENT);
-  const payoutPercent =
-    Number.isFinite(payoutRaw) && payoutRaw >= 0 && payoutRaw <= 500
-      ? payoutRaw
-      : 95.22;
-  return {
-    stakeMin: fees.stakeMinUsd || REAL_STAKE_MIN,
-    stakeMax: fees.stakeMaxUsd || REAL_STAKE_MAX,
-    maxOpen: fees.maxOpenTrades || REAL_MAX_OPEN_TRADES,
-    dailyLimit: fees.dailyProfitLimitUsd,
-    payoutPercent,
-  };
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS")
-    return new Response("ok", { headers: corsHeaders });
-
+async function handleTrade(req: Request): Promise<Response> {
   const admin = adminClient();
   const user = await userFromRequest(admin, req);
   if (!user) return json({ error: "Sign in to trade." }, 401);
 
-  const enabled = await realTradingEnabled(admin);
-  const trading = await loadTradingFees(admin);
+  const [enabled, trading] = await Promise.all([
+    realTradingEnabled(admin),
+    loadTradingFees(admin),
+  ]);
   const PLACE_ERRORS = placeErrors(
     trading.stakeMin,
     trading.stakeMax,
@@ -176,35 +160,11 @@ Deno.serve(async (req) => {
           sql<{ result: { reached?: boolean; limit?: number | null } }[]>`
             select public.real_trade_daily_status(${user.id}::uuid) as result
           `,
-        4_000,
+        1_200,
       );
       daily = rows[0]?.result ?? null;
     } catch (err) {
       console.error("trading.daily", err instanceof Error ? err.message : "error");
-    }
-    const { data: dailyRest, error: dailyError } = daily
-      ? { data: daily, error: null }
-      : await Promise.race([
-          admin.rpc("real_trade_daily_status", { p_user_id: user.id }),
-          new Promise<{ data: null; error: { message: string; code: string } }>((resolve) =>
-            setTimeout(
-              () => resolve({ data: null, error: { message: "timeout", code: "57014" } }),
-              3_000,
-            ),
-          ),
-        ]);
-    if (!daily && dailyRest) daily = dailyRest as { reached?: boolean; limit?: number | null };
-    if (dailyError) {
-      await logEdgeError(
-        admin,
-        "trading",
-        "real_trade_daily_status",
-        dailyError,
-        {
-          code: dailyError.code,
-          userId: user.id,
-        },
-      );
     }
     return json({
       enabled,
@@ -235,43 +195,55 @@ Deno.serve(async (req) => {
   if (!body || typeof body !== "object" || Array.isArray(body))
     return json({ error: "Invalid request." }, 400);
 
+  // Validate against defaults first so we can fetch the entry tick BEFORE any
+  // DB work. Hung pooler connections were wedging the isolate past WS timers.
   const parsed = validateRealTradeRequest(body, {
-    stakeMin: trading.stakeMin,
-    stakeMax: trading.stakeMax,
+    stakeMin: REAL_STAKE_MIN,
+    stakeMax: REAL_STAKE_MAX,
   });
   if (!parsed.ok) return json({ error: parsed.error }, 400);
-  if (!enabled)
-    return json({ error: PLACE_ERRORS.real_trading_disabled.message }, 403);
-  const access = await loadUserAccess(admin, user.id);
-  if (!access || access.accountStatus === "suspended") {
-    return json({ error: "This account cannot trade right now." }, 403);
-  }
   const input = parsed.value;
-
-  const existingRest = await Promise.race([
-    admin
-      .from("trades")
-      .select(TRADE_COLUMNS)
-      .eq("user_id", user.id)
-      .eq("idempotency_key", input.idempotencyKey)
-      .maybeSingle(),
-    new Promise<{ data: null }>((resolve) =>
-      setTimeout(() => resolve({ data: null }), 2_500),
-    ),
-  ]);
-  if (existingRest.data) return json({ trade: existingRest.data, already: true });
 
   let session: DerivSession | null = null;
   let entry = null;
   try {
-    session = await DerivSession.open();
-    entry = await fetchFreshTick(session, input.symbol);
+    entry = await Promise.race([
+      (async () => {
+        session = await DerivSession.open();
+        return await fetchFreshTick(session, input.symbol);
+      })(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 4_000)),
+    ]);
   } catch (err) {
-    await logEdgeError(admin, "trading", "real-trade.entry_tick", err, {
-      userId: user.id,
-    });
+    console.error(
+      "real-trade.entry_tick",
+      err instanceof Error ? err.message : "error",
+    );
   } finally {
-    session?.close();
+    try {
+      session?.close();
+    } catch {
+      /* closed */
+    }
+  }
+  if (!entry) {
+    // Optional client-provided tick from the live chart feed.
+    const price = Number(body.entry_price);
+    const epoch = Number(body.entry_epoch);
+    const pip = Number(body.pip_size);
+    const ageMs = Number.isFinite(epoch) ? Date.now() - epoch * 1000 : NaN;
+    if (
+      Number.isFinite(price) &&
+      price > 0 &&
+      Number.isFinite(epoch) &&
+      Number.isFinite(pip) &&
+      pip > 0 &&
+      Number.isFinite(ageMs) &&
+      ageMs >= -2_000 &&
+      ageMs <= 5_000
+    ) {
+      entry = { price, epoch: Math.round(epoch), pipSize: pip, ageMs };
+    }
   }
   if (!entry) {
     return json(
@@ -281,6 +253,16 @@ Deno.serve(async (req) => {
       },
       503,
     );
+  }
+
+  if (!enabled)
+    return json({ error: PLACE_ERRORS.real_trading_disabled.message }, 403);
+  if (input.stake < trading.stakeMin || input.stake > trading.stakeMax) {
+    return json({ error: PLACE_ERRORS.invalid_stake.message }, 400);
+  }
+  const access = await loadUserAccess(admin, user.id);
+  if (!access || access.accountStatus === "suspended") {
+    return json({ error: "This account cannot trade right now." }, 403);
   }
 
   const payoutRate = payoutRateForRpc(
@@ -309,11 +291,8 @@ Deno.serve(async (req) => {
       durationMs: input.durationMs,
     });
   } catch (err) {
-    console.error(
-      "trading.place.direct",
-      err instanceof Error ? err.message : "error",
-    );
-    const msg = err instanceof Error ? err.message : "";
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("trading.place.direct", msg);
     if (/real_trading_disabled|daily_limit_reached|insufficient_funds|too_many_open_trades|stale_entry_tick|invalid_stake|invalid_duration|wallet_not_found|wallet_not_ready|invalid_payout_rate|invalid_contract|invalid_idempotency_key|invalid_entry_tick/i.test(msg)) {
       placeError = { message: msg.split(" ").pop() ?? msg };
     }
@@ -353,7 +332,7 @@ Deno.serve(async (req) => {
                 data: null,
                 error: { message: "timeout", code: "57014" },
               }),
-            8_000,
+            5_000,
           ),
       ),
     ]);
@@ -366,10 +345,7 @@ Deno.serve(async (req) => {
       ? PLACE_ERRORS[placeError.message ?? ""]
       : undefined;
     if (!known) {
-      await logEdgeError(admin, "trading", rpcName, placeError ?? NOT_CHARGED, {
-        code: placeError?.code,
-        userId: user.id,
-      });
+      console.error("trading.place", placeError?.message ?? NOT_CHARGED);
     }
     return json(
       { error: known?.message ?? NOT_CHARGED },
@@ -382,12 +358,15 @@ Deno.serve(async (req) => {
     const rows = await runDirect(
       (sql) =>
         sql<Record<string, unknown>[]>`
-          select *
+          select id, symbol, contract_type, contract_option, selected_digit, barrier,
+                 stake, duration_ms, duration_ticks, entry_epoch, tick_anchor_epoch,
+                 payout_rate, status, entry_price, exit_price, exit_digit, payout,
+                 profit_loss, expires_at, resolved_at, created_at, updated_at
             from public.trades
            where id = ${placed!.trade_id}::uuid
            limit 1
         `,
-      3_000,
+      1_500,
     );
     trade = rows[0] ?? null;
   } catch (err) {
@@ -397,21 +376,79 @@ Deno.serve(async (req) => {
     );
   }
   if (!trade) {
-    const { data } = await Promise.race([
-      admin
-        .from("trades")
-        .select(TRADE_COLUMNS)
-        .eq("id", placed.trade_id)
-        .single(),
-      new Promise<{ data: null }>((resolve) =>
-        setTimeout(() => resolve({ data: null }), 2_500),
-      ),
-    ]);
-    trade = data;
+    // Place already charged — never return trade:null or the UI treats it as failure.
+    trade = {
+      id: placed.trade_id,
+      symbol: input.symbol,
+      contract_type: input.contractType,
+      contract_option: input.contractOption,
+      selected_digit: input.selectedDigit,
+      barrier: input.barrier,
+      stake: input.stake,
+      duration_ms: input.durationMs,
+      duration_ticks: input.durationTicks ?? null,
+      entry_epoch: entry.epoch,
+      tick_anchor_epoch: entry.epoch,
+      payout_rate: payoutRate,
+      status: "open",
+      entry_price: entry.price,
+      exit_price: null,
+      exit_digit: null,
+      payout: null,
+      profit_loss: null,
+      expires_at: new Date(
+        (entry.epoch + Math.max(2, input.durationTicks ?? 1) * 2) * 1000,
+      ).toISOString(),
+      resolved_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
   }
   return json({
     trade,
     already: placed.already === true,
     entry_age_ms: Math.round(entry.ageMs),
   });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
+  // Client allows ~35s for real-trade; keep a hard cap under that.
+  const budgetMs = req.method === "GET" ? 6_000 : 28_000;
+  try {
+    return await Promise.race([
+      handleTrade(req),
+      new Promise<Response>((resolve) =>
+        setTimeout(
+          () =>
+            resolve(
+              json(
+                {
+                  error:
+                    req.method === "GET"
+                      ? "Trading status is temporarily unavailable. Please try again."
+                      : "Live trading is temporarily unavailable. Your balance was not charged — please try again.",
+                  enabled: req.method === "GET" ? true : undefined,
+                },
+                503,
+              ),
+            ),
+          budgetMs,
+        ),
+      ),
+    ]);
+  } catch (err) {
+    console.error(
+      "real-trade.handler",
+      err instanceof Error ? err.message : "error",
+    );
+    return json(
+      {
+        error:
+          "Live trading is temporarily unavailable. Your balance was not charged — please try again.",
+      },
+      503,
+    );
+  }
 });

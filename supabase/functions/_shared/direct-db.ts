@@ -1,4 +1,6 @@
+import net from "node:net";
 import postgres from "npm:postgres";
+import { freshAttemptPlan } from "./db-attempt-plan.ts";
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -79,8 +81,128 @@ export function databaseUrlCandidates(): string[] {
   return out.length ? out : [raw];
 }
 
+/** Session mode (5432) keeps a backend for the life of the socket. That fills the 60-connection cap. */
+function transactionPoolerUrls(): string[] {
+  const urls = databaseUrlCandidates().filter((url) => /:6543(\/|\?|$)/.test(url));
+  return urls.length ? urls : databaseUrlCandidates();
+}
+
+/**
+ * Transaction pooler only. Session mode (5432) is one backend per socket and
+ * is what filled the 60-connection cap; the dashboard's single attempt was
+ * also stuck on that port until it timed out.
+ */
+function freshPoolerUrls(): string[] {
+  const tx = transactionPoolerUrls().filter((url) => /:6543(\/|\?|$)/.test(url));
+  return tx.length ? tx : transactionPoolerUrls();
+}
+
 function databaseUrl(): string {
-  return databaseUrlCandidates()[0]!;
+  return transactionPoolerUrls()[0]!;
+}
+
+/**
+ * Service-role Data API. The pooler from Edge often times out or closes on
+ * the first write; PostgREST on this project answers the same rows directly.
+ */
+function serviceRestAuth(): { url: string; key: string } {
+  const url = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!url || !key) throw new Error("rest unavailable");
+  return { url, key };
+}
+
+export async function serviceRestGet(
+  pathAndQuery: string,
+  timeoutMs = 8_000,
+): Promise<unknown> {
+  const { url, key } = serviceRestAuth();
+  const response = await fetch(`${url}/rest/v1/${pathAndQuery}`, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Accept: "application/json",
+    },
+    signal: AbortSignal.timeout(Math.max(1_000, timeoutMs)),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`rest ${response.status} ${text.replace(/\s+/g, " ").slice(0, 100)}`);
+  }
+  return await response.json();
+}
+
+/** Service-role write through PostgREST. Prefer this over pooler opens from Edge. */
+export async function serviceRestPost(
+  table: string,
+  body: Record<string, unknown>,
+  options?: { prefer?: string; timeoutMs?: number },
+): Promise<unknown> {
+  const { url, key } = serviceRestAuth();
+  const response = await fetch(`${url}/rest/v1/${table}`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Prefer: options?.prefer ?? "return=representation",
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 6_000),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`rest ${response.status} ${text.replace(/\s+/g, " ").slice(0, 100)}`);
+  }
+  if (response.status === 204) return null;
+  return await response.json();
+}
+
+/** Edge DNS often tries IPv6 first and the connect timer fires before A is used. */
+async function preferIpv4(host: string): Promise<string> {
+  if (net.isIP(host)) return host;
+  try {
+    const lookup = (Deno as unknown as {
+      resolveDns?: (name: string, type: "A") => Promise<string[]>;
+    }).resolveDns;
+    if (!lookup) return host;
+    const records = await lookup(host, "A");
+    if (records[0]) return records[0];
+  } catch {
+    /* keep the hostname */
+  }
+  return host;
+}
+
+/**
+ * Plain TCP to the A record. postgres.js sends the SSLRequest and upgrades
+ * this socket itself; handing it an already-TLS socket makes the pooler
+ * close the connection on the first write.
+ */
+function directSocket(_options: { ssl?: unknown }, host: string, port: number) {
+  return new Promise<net.Socket>((resolve, reject) => {
+    let socket: net.Socket | undefined;
+    const timer = setTimeout(() => {
+      socket?.destroy();
+      reject(new Error("connect timeout"));
+    }, 4_000);
+    const fail = (err: unknown) => {
+      clearTimeout(timer);
+      reject(err instanceof Error ? err : new Error("connect failed"));
+    };
+    void (async () => {
+      const address = await preferIpv4(host);
+      socket = net.connect({ host: address, port });
+      socket.once("error", fail);
+      socket.once("connect", () => {
+        clearTimeout(timer);
+        socket?.off("error", fail);
+        socket?.setNoDelay(true);
+        if (socket) resolve(socket);
+      });
+    })().catch(fail);
+  });
 }
 
 function sqlOpts() {
@@ -89,8 +211,10 @@ function sqlOpts() {
     fetch_types: false,
     ssl: "require" as const,
     max: 1,
-    connect_timeout: 2,
-    idle_timeout: 0,
+    connect_timeout: 4,
+    // Drop a warm socket that nobody is using so isolates cannot pin a backend.
+    idle_timeout: 10,
+    socket: directSocket,
   };
 }
 
@@ -116,23 +240,12 @@ function isTimeout(err: unknown): boolean {
   return /timeout|timed out/i.test(message);
 }
 
-/** One statement on the warm pool. List reads skip BEGIN and set_config. */
+/** Fresh socket only — no warm shared pool that can pin idle backends. */
 export async function withDirectRead<T>(
   run: (sql: Sql) => Promise<T>,
   timeoutMs = 2500,
 ): Promise<T> {
-  const sql = sharedSql();
-  let timer: number | undefined;
-  try {
-    return await Promise.race([
-      run(sql),
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
+  return await withFreshDb(run, Math.max(500, Math.floor(timeoutMs)));
 }
 
 function isClosedConnection(err: unknown): boolean {
@@ -149,14 +262,13 @@ export async function withFreshDb<T>(
   run: (sql: Sql) => Promise<T>,
   timeoutMs = 8000,
 ): Promise<T> {
-  const urls = databaseUrlCandidates();
-  // Try the preferred pooler host, then one fallback — enough to survive
-  // aws-0/aws-1 tenant routing without burning the whole request budget.
-  const maxAttempts = Math.min(urls.length, 3);
-  // Admin overview runs multiple selects; keep most of the caller budget per try.
-  const perAttempt = Math.max(500, Math.floor(timeoutMs / maxAttempts));
+  const urls = freshPoolerUrls();
+  // One fallback host when the budget can cover two connects. Never slice
+  // below connect_timeout or the read dies before Postgres accepts it.
+  const plan = freshAttemptPlan(timeoutMs, urls.length);
+  const notes: string[] = [];
   let last: unknown = null;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  for (let attempt = 0; attempt < plan.attempts; attempt++) {
     const sql = openDirectSql(urls[attempt]);
     let timer: number | undefined;
     const query = run(sql);
@@ -164,21 +276,21 @@ export async function withFreshDb<T>(
       const value = await Promise.race([
         query,
         new Promise<T>((_, reject) => {
-          timer = setTimeout(() => reject(new Error("timeout")), perAttempt);
+          timer = setTimeout(() => reject(new Error("timeout")), plan.perAttemptMs);
         }),
       ]);
-      // Prefer a working URL for later shared-pool calls in this isolate.
-      if (urls[attempt] && urls[attempt] !== poolUrl) {
-        poolUrl = urls[attempt]!;
-        pool = postgres(poolUrl, { ...sqlOpts(), max_lifetime: 60 * 30 });
-      }
+      // Do not keep a warm shared pool. Webhook floods used to leave one idle
+      // postgres backend per Edge isolate and Auth could not open auth_admin.
       return value;
     } catch (err) {
       last = err;
+      const port = (urls[attempt]?.match(/:(\d+)(?=\/|\?|$)/) ?? [])[1] ?? "?";
+      const message = err instanceof Error ? err.message : "error";
+      notes.push(`${port}:${message.replace(/postgres(?:ql)?:\/\/\S+/gi, "[db]").slice(0, 80)}`);
       query.catch(() => {
         /* the timed-out read is closed with the client */
       });
-      if (!isClosedConnection(err) && !isTimeout(err) && attempt === maxAttempts - 1) {
+      if (!isClosedConnection(err) && !isTimeout(err) && attempt === plan.attempts - 1) {
         break;
       }
     } finally {
@@ -190,61 +302,31 @@ export async function withFreshDb<T>(
       }
     }
   }
-  throw last instanceof Error ? last : new Error("failed");
+  const summary = notes.join(" | ");
+  throw summary ? new Error(summary) : last instanceof Error ? last : new Error("failed");
 }
 
-/** Pool first, then a fresh connection. Used when the Data API is not answering. */
+/**
+ * Always open → run → close. The old shared-pool BEGIN path left
+ * "idle in transaction" backends after Edge timeouts, which filled the
+ * 60-connection cap and took Auth + PostgREST + admin offline.
+ */
 export async function runDirect<T>(
   run: (sql: Sql) => Promise<T>,
   timeoutMs = 5000,
 ): Promise<T> {
-  // Keep the whole direct path inside the caller's budget. Cascading pooler
-  // hosts used to burn 30–60s and trip edge IDLE_TIMEOUT / client aborts.
   const budget = Math.max(500, Math.min(timeoutMs, 8_000));
-  try {
-    return await withDirectDb(run, budget);
-  } catch (first) {
-    if (!isClosedConnection(first) && !isTimeout(first)) {
-      /* still try a fresh socket; the shared pool may be stale */
-    }
-    return await withFreshDb(run, Math.min(budget, 3_000));
-  }
+  return await withFreshDb(run, budget);
 }
 
+/**
+ * Same as runDirect: a fresh pooler socket that is always closed.
+ * Callers that need multi-statement atomicity should BEGIN inside `run`;
+ * sql.end() in withFreshDb aborts that transaction if the budget expires.
+ */
 export async function withDirectDb<T>(
   run: (sql: Sql) => Promise<T>,
   timeoutMs = 2500,
 ): Promise<T> {
-  const budget = Math.max(500, Math.floor(timeoutMs));
-  const sql = sharedSql();
-  const ms = String(budget);
-  let timer: number | undefined;
-  const work = (async () => {
-    try {
-      return await sql.begin(async (tx) => {
-        const bound = tx as Sql;
-        if (typeof bound.json !== "function") bound.json = sql.json.bind(sql);
-        await bound`select set_config('statement_timeout', ${ms}, true)`;
-        return await run(bound);
-      });
-    } catch (err) {
-      if (isTimeout(err)) throw err;
-      const message = err instanceof Error ? err.message : String(err);
-      if (!/set_config|transaction/i.test(message)) throw err;
-      return await run(sql);
-    }
-  })();
-  try {
-    return await Promise.race([
-      work,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("timeout")), budget + 750);
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-    work.catch(() => {
-      /* abandoned after outer race */
-    });
-  }
+  return await withFreshDb(run, Math.max(500, Math.floor(timeoutMs)));
 }

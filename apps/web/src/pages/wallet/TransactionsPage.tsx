@@ -7,7 +7,7 @@ import { demoAccountShort } from '@/lib/branding'
 
 export function TransactionsPage() {
   const { kind } = useAccountMode()
-  const { transactions, deposits, withdrawals } = useWalletHistory(kind)
+  const { transactions, deposits, withdrawals, loading, message } = useWalletHistory(kind)
   const isDemo = kind === 'demo'
 
   const rows = transactions.map((item) => [
@@ -36,30 +36,34 @@ export function TransactionsPage() {
       <div className="grid gap-3 lg:grid-cols-3">
         <Card>
           <h2 className="font-display font-semibold">Deposits</h2>
-          <p className="mt-2 font-mono text-2xl">{isDemo ? '—' : deposits.length}</p>
+          <p className="mt-2 font-mono text-2xl">{isDemo ? '—' : loading ? '…' : deposits.length}</p>
         </Card>
         <Card>
           <h2 className="font-display font-semibold">{isDemo ? `${demoAccountShort()} Withdrawals` : 'Withdrawals'}</h2>
-          <p className="mt-2 font-mono text-2xl">{withdrawals.length}</p>
+          <p className="mt-2 font-mono text-2xl">{loading && !isDemo ? '…' : withdrawals.length}</p>
         </Card>
         <Card>
           <h2 className="font-display font-semibold">{isDemo ? `${demoAccountShort()} Ledger` : 'Ledger'}</h2>
-          <p className="mt-2 font-mono text-2xl">{transactions.length}</p>
+          <p className="mt-2 font-mono text-2xl">{loading && !isDemo ? '…' : transactions.length}</p>
         </Card>
       </div>
-      <Card className="mt-4">
-        <DataTable
-          columns={['Type', 'Amount', 'Status', 'Note', 'Time']}
-          rows={rows}
-          empty={
-            <EmptyState
-              title={isDemo ? `No ${demoAccountShort()} transactions yet` : 'No transactions yet'}
-              body={isDemo ? `Place ${demoAccountShort()} trades to populate this ledger.` : undefined}
-            />
-          }
-        />
-      </Card>
-      {!isDemo ? (
+      {loading && !isDemo ? <p className="mt-4 text-sm text-mist">Loading transactions and deposits…</p> : null}
+      {!loading && message && !isDemo ? <p className="mt-3 text-sm text-mist">{message}</p> : null}
+      {!loading || isDemo ? (
+        <Card className="mt-4">
+          <DataTable
+            columns={['Type', 'Amount', 'Status', 'Note', 'Time']}
+            rows={rows}
+            empty={
+              <EmptyState
+                title={isDemo ? `No ${demoAccountShort()} transactions yet` : 'No transactions yet'}
+                body={isDemo ? `Place ${demoAccountShort()} trades to populate this ledger.` : message || undefined}
+              />
+            }
+          />
+        </Card>
+      ) : null}
+      {!isDemo && !loading ? (
         <Card className="mt-4">
           <h2 className="mb-3 font-display font-semibold">Deposits</h2>
           <DataTable

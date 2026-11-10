@@ -24,6 +24,7 @@ $all = @(
   'admin-users',
   'admin-withdrawals',
   'platform-settings',
+  'login-phone',
   'megapay-deposit',
   'megapay-status',
   'megapay-webhook',
@@ -58,6 +59,7 @@ $noJwt = @(
   'admin-trade-settings',
   'admin-withdrawals',
   'platform-settings',
+  'login-phone',
   'system-issues'
 )
 foreach ($name in $toDeploy) {
