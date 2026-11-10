@@ -28,6 +28,7 @@ export const COUNTRIES = [
 export function LoginForm() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { acceptUser } = useAuthSession()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -45,17 +46,25 @@ export function LoginForm() {
     setLoading(true)
     setOk(false)
     setMessage(null)
+    // Hard ceiling so the button never sticks on "Signing in…" if Auth wedges.
+    const ceiling = globalThis.setTimeout(() => {
+      setLoading(false)
+      setOk(false)
+      setMessage('Sign-in is taking too long. Please try again.')
+    }, 28_000)
     try {
       const result = await authService.signIn({ email, password })
       setMessage(result.message)
       setOk(result.connected && Boolean(result.data))
       if (result.connected && result.data) {
+        acceptUser(result.data, result.message)
         navigate(resolvePostAuthPath(location.search, location.state), { replace: true })
       }
     } catch {
       setOk(false)
       setMessage('Sign-in is taking too long. Please try again.')
     } finally {
+      globalThis.clearTimeout(ceiling)
       setLoading(false)
     }
   }
@@ -114,6 +123,7 @@ export function LoginForm() {
 
 export function SignupForm() {
   const navigate = useNavigate()
+  const { acceptUser } = useAuthSession()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -152,6 +162,7 @@ export function SignupForm() {
     if (result.connected && result.data) {
       setOk(true)
       setMessage(result.message)
+      acceptUser(result.data, result.message)
       navigate(TRADE_ROUTE, { replace: true })
       return
     }

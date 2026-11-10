@@ -59,7 +59,8 @@ import type {
 import { demoAccountShort } from "@/lib/branding";
 
 const SESSION_READ_MS = 2_500;
-const SIGN_IN_MS = 9_000;
+/** Must stay above dataApiFetch password-grant budget (slow GoTrue often takes 10–16s). */
+const SIGN_IN_MS = 24_000;
 const PHONE_LOOKUP_MS = 2_500;
 
 export const e2eAuthBypassEnabled =
@@ -452,20 +453,12 @@ async function emailForPhone(phone: string): Promise<string | null> {
  * Direct password grant bypasses GoTrueClient's navigator lock. When Auth is
  * slow, signInWithPassword can wait forever behind a hung getSession/refresh.
  */
-async function passwordGrantDirect(
+async function passwordGrantDirectOnce(
+  supabaseUrl: string,
+  supabaseKey: string,
   email: string,
   password: string,
 ): Promise<{ session: Session; user: AuthUser } | { error: string }> {
-  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || "";
-  const publishableKey =
-    (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || "";
-  const anonKey =
-    (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || "";
-  const supabaseKey =
-    (anonKey.startsWith("eyJ") ? anonKey : "") || publishableKey || anonKey;
-  if (!supabaseUrl || !supabaseKey) {
-    return { error: "Sign-in is temporarily unavailable." };
-  }
   let response: Response;
   try {
     response = await raceWithTimeout(
@@ -522,6 +515,27 @@ async function passwordGrantDirect(
     user: body.user,
   } as Session;
   return { session, user: body.user };
+}
+
+async function passwordGrantDirect(
+  email: string,
+  password: string,
+): Promise<{ session: Session; user: AuthUser } | { error: string }> {
+  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || "";
+  const publishableKey =
+    (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim() || "";
+  const anonKey =
+    (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || "";
+  const supabaseKey =
+    (anonKey.startsWith("eyJ") ? anonKey : "") || publishableKey || anonKey;
+  if (!supabaseUrl || !supabaseKey) {
+    return { error: "Sign-in is temporarily unavailable." };
+  }
+  const first = await passwordGrantDirectOnce(supabaseUrl, supabaseKey, email, password);
+  if (!("error" in first)) return first;
+  // One retry when GoTrue is waking from a freeze / 521 window.
+  if (!/timed out|taking too long|unavailable/i.test(first.error)) return first;
+  return passwordGrantDirectOnce(supabaseUrl, supabaseKey, email, password);
 }
 
 /** Persist tokens when setSession hangs behind the Auth lock. */

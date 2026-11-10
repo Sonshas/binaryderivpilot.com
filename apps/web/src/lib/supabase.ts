@@ -40,8 +40,8 @@ function timeoutMsFor(url: string): number {
   if (url.includes('/rest/v1/')) return 2_500
   if (url.includes('/auth/v1/user')) return 2_500
   if (url.includes('/auth/v1/token?grant_type=refresh_token')) return 3_000
-  // Password grant must fail fast so the login button never sticks on "Signing in…".
-  if (url.includes('/auth/v1/token?grant_type=password')) return 8_000
+  // Allow slow GoTrue (often 10–16s when degraded) without aborting a valid grant.
+  if (url.includes('/auth/v1/token?grant_type=password')) return 22_000
   // REAL place/settle must reach Deriv + Postgres; under 30s aborted valid tickets.
   if (url.includes('/functions/v1/real-trade')) return 35_000
   if (url.includes('/functions/v1/admin-dashboard')) return 22_000

@@ -17,6 +17,8 @@ interface AuthContextValue {
   message: string
   authService: typeof authService
   refresh: () => Promise<void>
+  /** Apply a known session immediately (after password grant) without waiting on Auth locks. */
+  acceptUser: (next: User | null, nextMessage?: string) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -31,10 +33,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const refresh = useCallback(async () => {
-    const result = await authService.getSession()
-    setUser(result.data)
-    setMessage(result.message)
+    // Prefer local storage first so a hung getSession after password grant
+    // cannot bounce RequireAuth back to /login.
+    const peeked = authService.peekSession()
+    if (peeked) {
+      setUser(peeked)
+      setMessage(`Session active for ${peeked.email}.`)
+      setLoading(false)
+    }
+    try {
+      const result = await authService.getSession()
+      setUser(result.data)
+      setMessage(result.message)
+    } catch {
+      if (!authService.peekSession()) {
+        setUser(null)
+        setMessage('Sign-in is temporarily unavailable.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const acceptUser = useCallback((next: User | null, nextMessage?: string) => {
+    setUser(next)
     setLoading(false)
+    setMessage(
+      nextMessage ??
+        (next ? `Session active for ${next.email}.` : 'No active session.'),
+    )
   }, [])
 
   useEffect(() => {
@@ -86,8 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       message,
       authService,
       refresh,
+      acceptUser,
     }),
-    [user, loading, message, refresh],
+    [user, loading, message, refresh, acceptUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
