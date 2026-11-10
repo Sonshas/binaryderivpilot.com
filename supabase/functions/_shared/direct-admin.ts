@@ -129,7 +129,7 @@ async function loadAdminDashboardSourcesSql() {
          order by created_at desc nulls last
          limit ${OVERVIEW_USER_CAP}
       `,
-    4_000,
+    5_000,
   );
   const depositRows = await withFreshDb(
     (sql) =>
@@ -155,7 +155,7 @@ async function loadAdminDashboardSourcesSql() {
          order by created_at desc
          limit ${OVERVIEW_DEPOSIT_CAP}
       `,
-    4_000,
+    5_000,
   );
   return sourcesFromRows(depositRows, profileRows);
 }

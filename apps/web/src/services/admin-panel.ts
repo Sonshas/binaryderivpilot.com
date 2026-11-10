@@ -1,7 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { PeriodSeries, PeriodSummary } from '@/domain/admin-panel'
-import { abortSignalAfter, raceWithTimeout } from '@/lib/abort-timeout'
-import { getSupabase } from '@/lib/supabase'
+import { raceWithTimeout } from '@/lib/abort-timeout'
+import { dataApiFetch, getSupabase, peekStoredAccessToken, supabaseApiAuth } from '@/lib/supabase'
 import type { Result } from '@/services/megapay'
 
 /**
@@ -207,17 +207,29 @@ const UNAVAILABLE = 'This service is temporarily unavailable.'
 export const adminPanelService = {
   /** Server-decided: true only for the confirmed allow-listed superadmin account. */
   async isSuperadmin(): Promise<boolean> {
-    const client = getSupabase()
-    if (!client) return false
+    // Never call client.auth.getSession() here — it takes the Auth lock and,
+    // when /admin also loads the dashboard, login-adjacent reads pile up until
+    // both hang. Use the stored bearer and a short RPC.
+    const api = supabaseApiAuth()
+    const token = peekStoredAccessToken()
+    if (!api || !token) return false
     try {
-      const { data: session } = await client.auth.getSession()
-      if (!session.session) return false
-      const { data, error } = await raceWithTimeout(
-        Promise.resolve(client.rpc('is_superadmin').abortSignal(abortSignalAfter(3_000))),
-        3_000,
+      const response = await raceWithTimeout(
+        dataApiFetch(`${api.url}/rest/v1/rpc/is_superadmin`, {
+          method: 'POST',
+          headers: {
+            apikey: api.key,
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: '{}',
+        }),
+        2_500,
         'timeout',
       )
-      return !error && data === true
+      if (!response.ok) return false
+      const data = (await response.json()) as unknown
+      return data === true
     } catch {
       return false
     }
