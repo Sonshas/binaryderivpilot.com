@@ -174,11 +174,13 @@ describe('deposit reads are not replaced with an empty list', () => {
     expect(realWalletFn).not.toContain('deposits: []')
   })
 
-  it('loads the admin overview from a lean Data API read before the pooler', () => {
+  it('loads the admin overview from pooler selects before Data API', () => {
     const fn = directAdmin.slice(directAdmin.indexOf('export async function loadAdminDashboardSources'))
+    expect(fn).toContain('loadAdminDashboardSourcesSql')
     expect(fn).toContain('loadAdminDashboardSourcesRest')
-    expect(fn.indexOf('loadAdminDashboardSourcesRest')).toBeLessThan(fn.indexOf('withFreshDb'))
-    expect(fn).toContain('null::jsonb as details')
+    expect(fn.indexOf('loadAdminDashboardSourcesSql')).toBeLessThan(fn.indexOf('loadAdminDashboardSourcesRest'))
+    expect(fn).not.toContain('Promise.any')
+    expect(directAdmin).toContain('null::jsonb as details')
     expect(directAdmin).toContain('deposits?select=')
     expect(directAdmin).not.toContain('details,created_at,updated_at,is_simulated,account_mode&account_mode')
   })

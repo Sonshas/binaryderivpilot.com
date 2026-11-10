@@ -96,27 +96,74 @@ function sourcesFromRows(depositRows: SqlRow[], profileRows: SqlRow[]) {
   };
 }
 
+const OVERVIEW_DEPOSIT_CAP = 50;
+const OVERVIEW_USER_CAP = 100;
+
 /** Data API overview. Throws when deposits cannot be read — never an empty stand-in. */
 async function loadAdminDashboardSourcesRest() {
-  // Lean columns only — full `details` blobs OOMed the Edge worker.
-  const restMs = 22_000;
+  // Short budget. Do not run this at the same time as a pooler open — that
+  // race left both paths failing while login-phone (SQL alone) still worked.
+  const restMs = 8_000;
   const [depositRows, profileRows] = await Promise.all([
     serviceRestGet(
-      "deposits?select=id,user_id,amount,currency,status,provider,method,mpesa_receipt,callback_amount_kes,created_at,updated_at,is_simulated,account_mode&account_mode=eq.real&is_simulated=eq.false&method=eq.mpesa&order=created_at.desc&limit=400",
+      `deposits?select=id,user_id,amount,currency,status,provider,method,mpesa_receipt,callback_amount_kes,created_at,updated_at,is_simulated,account_mode&account_mode=eq.real&is_simulated=eq.false&method=eq.mpesa&order=created_at.desc&limit=${OVERVIEW_DEPOSIT_CAP}`,
       restMs,
     ).then(rowsFromRest),
     serviceRestGet(
-      "users?select=id,email,role,created_at&order=created_at.desc&limit=800",
+      `users?select=id,email,role,created_at&order=created_at.desc&limit=${OVERVIEW_USER_CAP}`,
       restMs,
     ).then(rowsFromRest),
   ]);
   return sourcesFromRows(depositRows, profileRows);
 }
 
+/** Same shape as login-phone: one fresh socket, one simple select. */
+async function loadAdminDashboardSourcesSql() {
+  // Separate opens — a multi-statement transaction on Edge was closed mid-write
+  // while the tiny login-phone select on the same pooler still succeeded.
+  const profileRows = await withFreshDb(
+    (sql) =>
+      sql<SqlRow[]>`
+        select id::text as id, email, role, created_at
+          from public.users
+         order by created_at desc nulls last
+         limit ${OVERVIEW_USER_CAP}
+      `,
+    4_000,
+  );
+  const depositRows = await withFreshDb(
+    (sql) =>
+      sql<SqlRow[]>`
+        select id::text as id,
+               user_id::text as user_id,
+               amount,
+               currency,
+               status,
+               provider,
+               method,
+               mpesa_receipt,
+               callback_amount_kes,
+               null::jsonb as details,
+               created_at,
+               updated_at,
+               is_simulated,
+               account_mode
+          from public.deposits
+         where account_mode = 'real'
+           and is_simulated = false
+           and lower(method) = 'mpesa'
+         order by created_at desc
+         limit ${OVERVIEW_DEPOSIT_CAP}
+      `,
+    4_000,
+  );
+  return sourcesFromRows(depositRows, profileRows);
+}
+
 /**
  * Dashboard reads for /admin and /admin/earnings.
- * Lean Data API first — pooler writes from Edge often close
- * (CONNECTION_CLOSED on 6543) and full `details` blobs OOMed the worker.
+ * Pooler first (same path as login-phone). REST only if that socket fails —
+ * racing both starved the pool and returned 500 while phone login still worked.
  */
 export async function loadAdminDashboardSources(): Promise<{
   authUsers: AuthUserSource[];
@@ -124,46 +171,16 @@ export async function loadAdminDashboardSources(): Promise<{
   deposits: DepositSource[];
 }> {
   try {
-    return await loadAdminDashboardSourcesRest();
-  } catch (restErr) {
+    return await loadAdminDashboardSourcesSql();
+  } catch (directErr) {
     console.error(
-      "admin-dashboard.rest",
-      restErr instanceof Error ? restErr.message : "error",
+      "admin-dashboard.direct",
+      directErr instanceof Error
+        ? directErr.message.replace(/postgres(?:ql)?:\/\/\S+/gi, "[db]").slice(0, 160)
+        : "error",
     );
   }
-  const overviewDepositCap = Math.min(DEPOSIT_CAP, 400);
-  const overviewUserCap = Math.min(USER_CAP, 800);
-  return await withFreshDb(async (sql) => {
-    const depositRows = await sql<SqlRow[]>`
-      select id::text as id,
-             user_id::text as user_id,
-             amount,
-             currency,
-             status,
-             provider,
-             method,
-             mpesa_receipt,
-             callback_amount_kes,
-             null::jsonb as details,
-             created_at,
-             updated_at,
-             is_simulated,
-             account_mode
-        from public.deposits
-       where account_mode = 'real'
-         and is_simulated = false
-         and lower(method) = 'mpesa'
-       order by created_at desc
-       limit ${overviewDepositCap}
-    `;
-    const profileRows = await sql<SqlRow[]>`
-      select id::text as id, email, role, created_at
-        from public.users
-       order by created_at desc nulls last
-       limit ${overviewUserCap}
-    `;
-    return sourcesFromRows(depositRows, profileRows);
-  }, 8_000);
+  return await loadAdminDashboardSourcesRest();
 }
 
 export type AdminUserListSqlRow = {
