@@ -27,7 +27,6 @@ const darajaConfig = {
   max_kes: 150000,
   message: null,
 }
-const megapayConfig = { enabled: true, kes_per_usd: 130, min_kes: 1600, max_kes: 150000, message: null }
 const pending = { deposit_id: 'd1', reference: 'OMT-ABCD2345', status: 'PENDING', amount_usd: 12.31, amount_kes: 1600, receipt: null, failure_reason: null }
 
 beforeEach(() => {
@@ -36,7 +35,7 @@ beforeEach(() => {
 })
 
 describe('resolveDepositProvider', () => {
-  it('defaults to daraja and honours megapay', () => {
+  it('defaults to daraja and honours megapay labels only for parsing', () => {
     expect(resolveDepositProvider({ provider: 'daraja' })).toBe('daraja')
     expect(resolveDepositProvider({ provider: 'megapay' })).toBe('megapay')
     expect(resolveDepositProvider({})).toBe('daraja')
@@ -50,7 +49,7 @@ describe('resolveDepositProvider', () => {
 })
 
 describe('depositService provider selection', () => {
-  it('uses the Daraja functions when MegaPay config is unavailable', async () => {
+  it('uses only the Daraja functions for config, start, and status', async () => {
     responses.set('GET mpesa-deposit', darajaConfig)
     responses.set('POST mpesa-deposit', pending)
     responses.set('POST mpesa-status', { ...pending, status: 'COMPLETED', receipt: 'NLJ7RT61SV' })
@@ -68,7 +67,6 @@ describe('depositService provider selection', () => {
       .filter((c) => c.name !== 'system-issues')
       .map((c) => `${c.method} ${c.name}`)
     expect(depositCalls).toEqual([
-      'GET megapay-deposit',
       'GET mpesa-deposit',
       'POST mpesa-deposit',
       'POST mpesa-status',
@@ -79,49 +77,20 @@ describe('depositService provider selection', () => {
     })
   })
 
-  it('loads MegaPay config first when the MegaPay rail is available', async () => {
-    responses.set('GET megapay-deposit', megapayConfig)
-    responses.set('POST megapay-deposit', pending)
-    responses.set('POST megapay-status', pending)
-
-    const config = await depositService.getConfig()
-    expect(config.ok && config.data.provider).toBe('megapay')
-    expect(config.ok && config.data.minKes).toBe(1600)
+  it('never calls MegaPay even when start is asked for megapay', async () => {
+    responses.set('POST mpesa-deposit', pending)
     await depositService.startDeposit('megapay', 1600, '254712345678')
-    await depositService.checkStatus('megapay', 'd1')
-    expect(calls.map((c) => `${c.method} ${c.name}`)).toEqual([
-      'GET megapay-deposit',
-      'POST megapay-deposit',
-      'POST megapay-status',
-    ])
+    expect(calls.map((c) => `${c.method} ${c.name}`)).toEqual(['POST mpesa-deposit'])
   })
 
-  it('falls back to local fee defaults when Edge config probes fail', async () => {
+  it('falls back to Winsoft Paybill defaults when Edge config probes fail', async () => {
     const config = await depositService.getConfig()
     expect(config.ok).toBe(true)
     if (!config.ok) return
     expect(config.data.enabled).toBe(true)
-    expect(config.data.provider).toBe('megapay')
+    expect(config.data.provider).toBe('daraja')
+    expect(config.data.paybill).toBe('4088285')
     expect(config.data.minKes).toBeGreaterThan(0)
     expect(config.data.maxKes).toBeGreaterThan(config.data.minKes)
-  })
-
-  it('ignores incomplete MegaPay payloads and uses the Daraja probe', async () => {
-    responses.set('GET megapay-deposit', { provider: 'daraja' })
-    responses.set('GET mpesa-deposit', darajaConfig)
-
-    const config = await depositService.getConfig()
-    expect(config).toEqual({
-      ok: true,
-      data: {
-        provider: 'daraja',
-        paybill: '4088285',
-        enabled: true,
-        kesPerUsd: 130,
-        minKes: 1600,
-        maxKes: 150000,
-        message: null,
-      },
-    })
   })
 })
