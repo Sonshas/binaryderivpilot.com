@@ -2,7 +2,6 @@ import { DEFAULT_DEPOSIT_PROVIDER, parseDepositProvider, type DepositProvider } 
 import { hydratePayMode, readSavedPayMode } from '@/lib/pay-mode'
 import { parseMegapayConfig } from '@/domain/megapay'
 import { raceWithTimeout } from '@/lib/abort-timeout'
-import { loadDemoSession } from '@/lib/demo-session'
 import { getSupabase } from '@/lib/supabase'
 import { readSavedHostFees } from '@/services/admin-fees'
 import {
@@ -23,8 +22,9 @@ export interface DepositConfig extends MegapayDepositConfig {
 export type DepositState = MegapayDepositState
 
 const DARAJA_FUNCTIONS = { start: 'mpesa-deposit', status: 'mpesa-status' } as const
-/** Keep the deposit form moving; fall back to saved fees if Edge is cold/slow. */
-const CONFIG_BUDGET_MS = 5_000
+/** Match the browser Edge fetch budget; 5s left cold starts on "busy". */
+const CONFIG_BUDGET_MS = 12_000
+const START_BUDGET_MS = 25_000
 const CONFIG_BUSY = 'Deposits are busy right now. Please try again.'
 
 export function resolveDepositProvider(raw: unknown): DepositProvider {
@@ -63,8 +63,22 @@ export function depositConfigFromPayload(data: Record<string, unknown>, provider
   }
 }
 
-function savedDepositConfig(): Result<DepositConfig> | null {
-  if (!loadDemoSession()?.email) return null
+function configFromMegapay(data: MegapayDepositConfig): DepositConfig | null {
+  return depositConfigFromPayload(
+    {
+      enabled: data.enabled,
+      kes_per_usd: data.kesPerUsd,
+      min_kes: data.minKes,
+      max_kes: data.maxKes,
+      quick_amounts: data.quickAmounts,
+      message: data.message,
+    },
+    'megapay',
+  )
+}
+
+/** Local fee defaults so a cold/slow Edge probe never blocks the deposit form. */
+function savedDepositConfig(): Result<DepositConfig> {
   const saved = readSavedHostFees()?.deposit
   const base = parseMegapayConfig({})
   const quick = (saved?.quickAmounts ?? '1600,2500,5000,10000')
@@ -89,14 +103,17 @@ function savedDepositConfig(): Result<DepositConfig> | null {
 export const depositService = {
   async getConfig(): Promise<Result<DepositConfig>> {
     const client = getSupabase()
-    if (!client) return savedDepositConfig() ?? { ok: false, error: UNAVAILABLE }
+    if (!client) return savedDepositConfig()
 
     // MegaPay is the live rail — load it first so a slow mpesa-deposit probe cannot starve the form.
     try {
       const megapay = await raceWithTimeout(megapayService.getConfig(), CONFIG_BUDGET_MS, CONFIG_BUSY)
       if (megapay.ok) {
-        hydratePayMode('megapay')
-        return { ok: true, data: { ...megapay.data, provider: 'megapay', paybill: null } }
+        const inline = configFromMegapay(megapay.data)
+        if (inline) {
+          hydratePayMode('megapay')
+          return { ok: true, data: inline }
+        }
       }
     } catch {
       /* fall through to mpesa-deposit probe / saved config */
@@ -112,22 +129,22 @@ export const depositService = {
       )
       data = result.data
       error = result.error
-    } catch (err) {
-      return savedDepositConfig() ?? { ok: false, error: err instanceof Error ? err.message : CONFIG_BUSY }
+    } catch {
+      return savedDepositConfig()
     }
-    if (error || !data) return savedDepositConfig() ?? { ok: false, error: await errorMessage(error) }
+    if (error || !data) return savedDepositConfig()
 
     const provider = resolveDepositProvider(data)
     hydratePayMode(provider)
     const inline = depositConfigFromPayload(data, provider)
     if (inline) return { ok: true, data: inline }
-    return { ok: false, error: UNAVAILABLE }
+    return savedDepositConfig()
   },
 
   async startDeposit(provider: DepositProvider, amountKes: number, phone: string): Promise<Result<DepositState>> {
     if (provider === 'megapay') {
       try {
-        return await raceWithTimeout(megapayService.startDeposit(amountKes, phone), 20_000, CONFIG_BUSY)
+        return await raceWithTimeout(megapayService.startDeposit(amountKes, phone), START_BUDGET_MS, CONFIG_BUSY)
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : CONFIG_BUSY }
       }
@@ -140,7 +157,7 @@ export const depositService = {
           method: 'POST',
           body: { amount_kes: amountKes, phone },
         }),
-        20_000,
+        START_BUDGET_MS,
         CONFIG_BUSY,
       )
       if (error || !data) return { ok: false, error: await errorMessage(error) }

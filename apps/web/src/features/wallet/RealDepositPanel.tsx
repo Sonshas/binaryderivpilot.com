@@ -171,7 +171,12 @@ export function RealDepositPanel({
     );
     if (!result.ok) {
       setPhase("form");
-      setError("Payment prompt failed. Contact support for assistance.");
+      setError(
+        safeUserMessage(
+          result.error,
+          "Payment prompt failed. Contact support for assistance.",
+        ),
+      );
       return;
     }
     setDeposit(result.data);

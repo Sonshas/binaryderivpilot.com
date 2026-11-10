@@ -46,6 +46,8 @@ function timeoutMsFor(url: string): number {
   if (url.includes('/functions/v1/real-trade')) return 35_000
   if (url.includes('/functions/v1/admin-dashboard')) return 35_000
   if (url.includes('/functions/v1/admin-users')) return 35_000
+  // STK start talks to MegaPay/Daraja; cold Edge + upstream often exceeds the default 12s.
+  if (url.includes('/functions/v1/megapay-deposit') || url.includes('/functions/v1/mpesa-deposit')) return 25_000
   if (url.includes('/functions/v1/login-phone')) return 8_000
   if (url.includes('/functions/v1/')) return 12_000
   if (url.includes('/auth/v1/')) return 8_000

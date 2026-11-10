@@ -96,8 +96,32 @@ describe('depositService provider selection', () => {
     ])
   })
 
-  it('reports an error when the deposit config is unavailable', async () => {
+  it('falls back to local fee defaults when Edge config probes fail', async () => {
     const config = await depositService.getConfig()
-    expect(config.ok).toBe(false)
+    expect(config.ok).toBe(true)
+    if (!config.ok) return
+    expect(config.data.enabled).toBe(true)
+    expect(config.data.provider).toBe('megapay')
+    expect(config.data.minKes).toBeGreaterThan(0)
+    expect(config.data.maxKes).toBeGreaterThan(config.data.minKes)
+  })
+
+  it('ignores incomplete MegaPay payloads and uses the Daraja probe', async () => {
+    responses.set('GET megapay-deposit', { provider: 'daraja' })
+    responses.set('GET mpesa-deposit', darajaConfig)
+
+    const config = await depositService.getConfig()
+    expect(config).toEqual({
+      ok: true,
+      data: {
+        provider: 'daraja',
+        paybill: '4088285',
+        enabled: true,
+        kesPerUsd: 130,
+        minKes: 1600,
+        maxKes: 150000,
+        message: null,
+      },
+    })
   })
 })
