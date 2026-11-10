@@ -23,10 +23,14 @@ export function useSystemHealth(pollMs = 60_000) {
   }, [])
 
   useEffect(() => {
-    void refresh()
-    if (!pollMs) return
+    // Defer the first probe so /admin overview can claim the pooler first.
+    const start = window.setTimeout(() => void refresh(), 3_500)
+    if (!pollMs) return () => window.clearTimeout(start)
     const timer = window.setInterval(() => void refresh(), pollMs)
-    return () => window.clearInterval(timer)
+    return () => {
+      window.clearTimeout(start)
+      window.clearInterval(timer)
+    }
   }, [refresh, pollMs])
 
   const failingProbes = health?.probes.filter((probe) => !probe.ok) ?? []

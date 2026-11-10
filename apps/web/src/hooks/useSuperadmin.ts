@@ -18,16 +18,20 @@ export function useSuperadmin(): SuperadminState {
     }
     let cancelled = false
     setState('checking')
-    void adminPanelService.isSuperadmin().then(
-      (yes) => {
-        if (!cancelled) setState(yes ? 'yes' : 'no')
-      },
-      () => {
-        if (!cancelled) setState('no')
-      },
-    )
+    // Defer so /admin dashboard can claim the pooler before this RPC.
+    const timer = globalThis.setTimeout(() => {
+      void adminPanelService.isSuperadmin().then(
+        (yes) => {
+          if (!cancelled) setState(yes ? 'yes' : 'no')
+        },
+        () => {
+          if (!cancelled) setState('no')
+        },
+      )
+    }, 2_500)
     return () => {
       cancelled = true
+      globalThis.clearTimeout(timer)
     }
   }, [loading, userId])
 

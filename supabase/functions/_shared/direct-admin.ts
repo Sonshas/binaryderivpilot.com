@@ -106,7 +106,7 @@ async function loadAdminDashboardSourcesRest() {
   const restMs = 8_000;
   const [depositRows, profileRows] = await Promise.all([
     serviceRestGet(
-      `deposits?select=id,user_id,amount,currency,status,provider,method,mpesa_receipt,callback_amount_kes,created_at,updated_at,is_simulated,account_mode&account_mode=eq.real&is_simulated=eq.false&method=eq.mpesa&order=created_at.desc&limit=${OVERVIEW_DEPOSIT_CAP}`,
+      `deposits?select=id,user_id,amount,currency,status,provider,method,mpesa_receipt,callback_amount_kes,created_at,updated_at,is_simulated,account_mode&account_mode=eq.real&is_simulated=eq.false&method=eq.mpesa&status=eq.COMPLETED&order=created_at.desc&limit=${OVERVIEW_DEPOSIT_CAP}`,
       restMs,
     ).then(rowsFromRest),
     serviceRestGet(
@@ -117,47 +117,45 @@ async function loadAdminDashboardSourcesRest() {
   return sourcesFromRows(depositRows, profileRows);
 }
 
-/** Same shape as login-phone: one fresh socket, one simple select. */
+/** Same shape as login-phone: one fresh socket, two tiny selects. */
 async function loadAdminDashboardSourcesSql() {
-  // Separate opens — a multi-statement transaction on Edge was closed mid-write
-  // while the tiny login-phone select on the same pooler still succeeded.
-  const profileRows = await withFreshDb(
-    (sql) =>
-      sql<SqlRow[]>`
-        select id::text as id, email, role, created_at
-          from public.users
-         order by created_at desc nulls last
-         limit ${OVERVIEW_USER_CAP}
-      `,
-    5_000,
-  );
-  const depositRows = await withFreshDb(
-    (sql) =>
-      sql<SqlRow[]>`
-        select id::text as id,
-               user_id::text as user_id,
-               amount,
-               currency,
-               status,
-               provider,
-               method,
-               mpesa_receipt,
-               callback_amount_kes,
-               null::jsonb as details,
-               created_at,
-               updated_at,
-               is_simulated,
-               account_mode
-          from public.deposits
-         where account_mode = 'real'
-           and is_simulated = false
-           and lower(method) = 'mpesa'
-         order by created_at desc
-         limit ${OVERVIEW_DEPOSIT_CAP}
-      `,
-    5_000,
-  );
-  return sourcesFromRows(depositRows, profileRows);
+  // One socket for both reads — two withFreshDb opens doubled pooler pressure
+  // under the /admin page stampede and timed out while login-phone still worked.
+  return await withFreshDb(async (sql) => {
+    const profileRows = await sql<SqlRow[]>`
+      select id::text as id, email, role, created_at
+        from public.users
+       order by created_at desc nulls last
+       limit ${OVERVIEW_USER_CAP}
+    `;
+    const depositRows = await sql<SqlRow[]>`
+      select id::text as id,
+             user_id::text as user_id,
+             amount,
+             currency,
+             status,
+             provider,
+             method,
+             mpesa_receipt,
+             callback_amount_kes,
+             null::jsonb as details,
+             created_at,
+             updated_at,
+             is_simulated,
+             account_mode
+        from public.deposits
+       where account_mode = 'real'
+         and is_simulated = false
+         and lower(method) = 'mpesa'
+         and status = 'COMPLETED'
+       order by created_at desc
+       limit ${OVERVIEW_DEPOSIT_CAP}
+    `;
+    if (!profileRows.length && !depositRows.length) {
+      throw new Error("empty overview");
+    }
+    return sourcesFromRows(depositRows, profileRows);
+  }, 10_000);
 }
 
 /**

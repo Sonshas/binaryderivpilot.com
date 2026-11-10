@@ -149,14 +149,17 @@ export const adminDashboardService = {
   async load(): Promise<Result<AdminDashboard>> {
     // Bearer from local storage. functions.invoke waits on the Auth lock and
     // getSession, which is the path that bounced /admin back to /login.
-    const first = await loadOverviewDirect()
-    if (first?.ok) return first
-    if (!first) return { ok: false, error: 'Sign in as an admin.' }
-    // One quiet retry — opening /admin also fires profile, flags, and
-    // is_superadmin; the first overview often loses that stampede.
-    await new Promise((resolve) => globalThis.setTimeout(resolve, 1_200))
-    const second = await loadOverviewDirect()
-    if (second) return second
-    return first
+    let last = await loadOverviewDirect()
+    if (last?.ok) return last
+    if (!last) return { ok: false, error: 'Sign in as an admin.' }
+    // Quiet retries — /admin also fires profile hydrate; deferred
+    // is_superadmin / system-health still land near the first overview.
+    for (const waitMs of [1_800, 3_000]) {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, waitMs))
+      const again = await loadOverviewDirect()
+      if (again?.ok) return again
+      if (again) last = again
+    }
+    return last
   },
 }
