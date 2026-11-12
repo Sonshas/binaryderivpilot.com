@@ -158,6 +158,10 @@ function DigitPicker({
   onChange: (digit: number) => void;
   disabled?: boolean;
 }) {
+  const [hoverDigit, setHoverDigit] = useState<number | null>(null);
+  // One blue ring only — follows pointer; falls back to the selected digit.
+  const ringDigit = hoverDigit ?? value;
+
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between">
@@ -171,24 +175,48 @@ function DigitPicker({
           </span>
         </p>
       </div>
-      <div className="grid grid-cols-10 gap-1" role="group" aria-label={label}>
-        {DIGITS.map((digit) => (
-          <button
-            key={digit}
-            type="button"
-            aria-pressed={value === digit}
-            disabled={disabled}
-            className={cn(
-              "h-8 rounded-md border font-mono text-sm transition-none disabled:cursor-not-allowed",
-              value === digit
-                ? "border-signal-light bg-signal-strong font-bold text-white ring-2 ring-signal-light/50"
-                : "border-line text-mist hover:text-paper disabled:opacity-50",
-            )}
-            onClick={() => onChange(digit)}
-          >
-            {digit}
-          </button>
-        ))}
+      <div
+        className="relative"
+        data-ring-digit={ringDigit}
+        onPointerLeave={() => setHoverDigit(null)}
+        onMouseLeave={() => setHoverDigit(null)}
+      >
+        <div className="grid grid-cols-10 gap-1" role="group" aria-label={label}>
+          {DIGITS.map((digit) => (
+            <button
+              key={digit}
+              type="button"
+              aria-pressed={value === digit}
+              disabled={disabled}
+              data-ring={ringDigit === digit ? "true" : "false"}
+              className={cn(
+                "relative z-[1] h-8 rounded-full border font-mono text-sm transition-none disabled:cursor-not-allowed",
+                value === digit
+                  ? "border-signal-light bg-signal-strong font-bold text-white"
+                  : "border-line text-mist hover:text-paper disabled:opacity-50",
+              )}
+              onPointerEnter={() => setHoverDigit(digit)}
+              onMouseEnter={() => setHoverDigit(digit)}
+              onFocus={() => setHoverDigit(digit)}
+              onBlur={() => setHoverDigit((current) => (current === digit ? null : current))}
+              onClick={() => onChange(digit)}
+            >
+              {digit}
+            </button>
+          ))}
+        </div>
+        <div
+          aria-hidden="true"
+          data-testid="digit-picker-pointer-ring"
+          data-digit={ringDigit}
+          className="pointer-events-none absolute inset-y-0 z-10 motion-safe:transition-[left] motion-safe:duration-150 motion-safe:ease-out"
+          style={{
+            left: `calc(${ringDigit} * ((100% - 2.25rem) / 10 + 0.25rem))`,
+            width: "calc((100% - 2.25rem) / 10)",
+          }}
+        >
+          <span className="absolute left-1/2 top-0 h-8 w-8 -translate-x-1/2 rounded-full border-[3px] border-signal-light shadow-[0_0_10px_rgba(96,165,250,0.55)]" />
+        </div>
       </div>
     </div>
   );

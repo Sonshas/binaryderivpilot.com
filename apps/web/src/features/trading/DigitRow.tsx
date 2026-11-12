@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { cn } from '@/lib/cn'
 import { scanDigits } from '@/domain/digit-scanner'
 import { digitsFromTicks } from '@/domain/digit-stats'
@@ -15,11 +15,10 @@ const SAMPLE_WINDOW = 100
 const RING_R = 14
 const RING_CIRC = 2 * Math.PI * RING_R
 
-function digitTone(wins: boolean, current: boolean) {
+function digitTone(wins: boolean) {
   const win = { stroke: '#00D094', text: '#00D094', track: 'rgba(0,208,148,0.22)' }
   const loss = { stroke: '#ff4d6a', text: '#ff4d6a', track: 'rgba(255,77,106,0.2)' }
-  const tone = wins ? win : loss
-  return { ...tone, glow: current ? `drop-shadow(0 0 7px ${tone.stroke})` : 'none' }
+  return wins ? win : loss
 }
 
 export function DigitRow({
@@ -33,6 +32,7 @@ export function DigitRow({
 }) {
   const ticket = useTicketChartSelection()
   const { kind } = useAccountMode()
+  const [hoverDigit, setHoverDigit] = useState<number | null>(null)
   const winRatePercent =
     kind === 'demo' ? demoWinRatePercent(winRatePercentForMode('demo')) : winRatePercentForMode('real')
   const anim = animation && animation.status !== 'idle' && animation.symbol === symbol ? animation : null
@@ -56,6 +56,8 @@ export function DigitRow({
   const uniform = scan.hottest.length === 10
   const maxCount = Math.max(...counts)
   const minCount = Math.min(...counts)
+  // One blue ring only: follows pointer; falls back to latest tick; yields to trade animation cursor.
+  const pointerRingDigit = anim ? null : (hoverDigit ?? lastDigit)
 
   return (
     <section
@@ -72,9 +74,16 @@ export function DigitRow({
       data-win-rate={winRatePercent}
       data-first-epoch={ticks[Math.max(0, ticks.length - SAMPLE_WINDOW)]?.epoch ?? ''}
       data-last-epoch={ticks[ticks.length - 1]?.epoch ?? ''}
+      data-hover-digit={hoverDigit ?? ''}
+      data-ring-digit={pointerRingDigit ?? ''}
     >
       <div className="relative">
-        <div className="relative grid grid-cols-10 gap-1" data-testid="digit-distribution">
+        <div
+          className="relative grid grid-cols-10 gap-1"
+          data-testid="digit-distribution"
+          onPointerLeave={() => setHoverDigit(null)}
+          onMouseLeave={() => setHoverDigit(null)}
+        >
           {DIGITS.map((digit) => {
             const count = counts[digit] ?? 0
             const hot = scan.sampleSize > 0 && !uniform && scan.hottest.includes(digit)
@@ -83,7 +92,7 @@ export function DigitRow({
             const wins = contractDigitWins(digit, ticket, winRatePercent)
             const share = scan.sampleSize > 0 ? (count / scan.sampleSize) * 100 : 0
             const fill = maxCount === minCount ? 0.55 : (count - minCount) / (maxCount - minCount)
-            const tone = digitTone(wins, isCurrent)
+            const tone = digitTone(wins)
             return (
               <div
                 key={digit}
@@ -95,12 +104,13 @@ export function DigitRow({
                 data-wins={wins ? 'true' : 'false'}
                 aria-label={`Digit ${digit}: ${wins ? 'wins' : 'loses'} at ${winRatePercent}% admin win rate, ${count} of ${scan.sampleSize} ticks${isCurrent ? ', latest digit' : ''}`}
                 className="flex flex-col items-center"
+                onPointerEnter={() => setHoverDigit(digit)}
+                onMouseEnter={() => setHoverDigit(digit)}
               >
                 <svg
                   viewBox="0 0 40 40"
                   aria-hidden="true"
                   className="relative z-[1] h-8 w-8 sm:h-10 sm:w-10"
-                  style={{ filter: tone.glow }}
                 >
                   <circle cx="20" cy="20" r={RING_R} fill="none" stroke={tone.track} strokeWidth="3.5" />
                   <circle
@@ -109,7 +119,7 @@ export function DigitRow({
                     r={RING_R}
                     fill="none"
                     stroke={tone.stroke}
-                    strokeWidth={isCurrent ? 4 : 3.5}
+                    strokeWidth="3.5"
                     strokeLinecap="round"
                     strokeDasharray={RING_CIRC}
                     strokeDashoffset={RING_CIRC - Math.max(0.12, fill) * RING_CIRC}
@@ -137,9 +147,35 @@ export function DigitRow({
             )
           })}
         </div>
+        {pointerRingDigit != null ? <PointerRing digit={pointerRingDigit} /> : null}
         {anim && anim.cursorDigit != null ? <DigitCursor animation={anim} digit={anim.cursorDigit} /> : null}
       </div>
     </section>
+  )
+}
+
+/** Column pitch matches `grid-cols-10 gap-1` (9 gaps × 0.25rem). `left` % is vs parent, not self. */
+function digitColumnStyle(digit: number): CSSProperties {
+  return {
+    left: `calc(${digit} * ((100% - 2.25rem) / 10 + 0.25rem))`,
+    width: 'calc((100% - 2.25rem) / 10)',
+  }
+}
+
+function PointerRing({ digit }: { digit: number }) {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="digit-pointer-ring"
+      data-digit={digit}
+      className="pointer-events-none absolute inset-y-0 z-10 motion-safe:transition-[left] motion-safe:duration-150 motion-safe:ease-out"
+      style={digitColumnStyle(digit)}
+    >
+      <span
+        data-testid="digit-pointer-ring-circle"
+        className="absolute left-1/2 top-[-2px] h-9 w-9 -translate-x-1/2 rounded-full border-[3px] border-signal-light shadow-[0_0_10px_rgba(96,165,250,0.55)] sm:h-10 sm:w-10"
+      />
+    </div>
   )
 }
 
@@ -161,13 +197,16 @@ function DigitCursor({ animation, digit }: { animation: TradeResultAnimationStat
       data-digit={digit}
       data-status={animation.status}
       data-trade-id={animation.tradeId ?? ''}
-      className="pointer-events-none absolute inset-y-0 left-0 z-10 will-change-transform motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out"
-      style={{ width: 'calc((100% - 2.25rem) / 10)', transform: `translateX(calc(${digit} * (100% + 0.25rem)))` }}
+      className="pointer-events-none absolute inset-y-0 z-10 motion-safe:transition-[left] motion-safe:duration-300 motion-safe:ease-out"
+      style={digitColumnStyle(digit)}
     >
       <span
         data-testid="digit-cursor-circle"
         data-digit={digit}
-        className={cn('absolute left-1/2 top-[-2px] h-9 w-9 -translate-x-1/2 rounded-full border-[3px] sm:h-10 sm:w-10', tone.ring)}
+        className={cn(
+          'absolute left-1/2 top-[-2px] h-9 w-9 -translate-x-1/2 rounded-full border-[3px] sm:h-10 sm:w-10',
+          tone.ring,
+        )}
       />
       <span className={cn('absolute bottom-[-2px] left-1/2 top-9 w-0.5 -translate-x-1/2 rounded-full opacity-80 sm:top-10', tone.line)} />
     </div>
