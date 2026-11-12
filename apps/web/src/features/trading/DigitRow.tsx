@@ -173,7 +173,7 @@ function PointerRing({ digit }: { digit: number }) {
     >
       <span
         data-testid="digit-pointer-ring-circle"
-        className="absolute left-1/2 top-[-2px] h-9 w-9 -translate-x-1/2 rounded-full border-[3px] border-signal-light shadow-[0_0_10px_rgba(96,165,250,0.55)] sm:h-10 sm:w-10"
+        className="absolute left-1/2 top-[-5px] h-10 w-10 -translate-x-1/2 rounded-full border-[3px] border-signal-light shadow-[0_0_14px_rgba(96,165,250,0.75)] sm:h-11 sm:w-11"
       />
     </div>
   )
