@@ -537,6 +537,56 @@ export function carvedHiddenDeposits<T extends { id: string; userId?: string }>(
   return partitionDailyHiddenFee(rows, amountUsd, at).hidden;
 }
 
+export interface NairobiDayEarnings<T> {
+  day: string;
+  /** False before {@link DAILY_HIDDEN_FEE_FROM}: the whole day stays visible. */
+  chargesFee: boolean;
+  rows: T[];
+  hidden: T[];
+  visible: T[];
+  /** Full completed-payment total, including the retained cut. */
+  fullUsd: number;
+  hiddenUsd: number;
+  /** Pool admins are allowed to see. */
+  visibleUsd: number;
+  paymentCount: number;
+  hiddenCount: number;
+}
+
+function roundUsd(amount: number): number {
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Full earnings for one Nairobi day, including payments carved into the retained cut.
+ * Days before {@link DAILY_HIDDEN_FEE_FROM} have no hidden fee.
+ */
+export function nairobiDayEarnings<T extends { id: string }>(
+  rows: T[],
+  day: string,
+  amountUsd: (row: T) => number,
+  at: (row: T) => string,
+): NairobiDayEarnings<T> {
+  const onDay = rows.filter((row) => nairobiDateKey(at(row)) === day);
+  const chargesFee = dayChargesHiddenFee(day);
+  const part = chargesFee
+    ? partitionDailyHiddenFee(onDay, amountUsd, at)
+    : { visible: onDay, hidden: [] as T[] };
+  const sum = (list: T[]) => roundUsd(list.reduce((total, row) => total + amountUsd(row), 0));
+  return {
+    day,
+    chargesFee,
+    rows: onDay,
+    hidden: part.hidden,
+    visible: part.visible,
+    fullUsd: sum(onDay),
+    hiddenUsd: sum(part.hidden),
+    visibleUsd: sum(part.visible),
+    paymentCount: onDay.length,
+    hiddenCount: part.hidden.length,
+  };
+}
+
 /**
  * Days before {@link DAILY_HIDDEN_FEE_FROM} stay complete.
  * That day and every later day charge and hide 20% of that day's incoming payments.

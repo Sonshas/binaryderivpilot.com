@@ -11,6 +11,7 @@ import {
   depositsForViewerOnDay,
   moneyKesForViewer,
   nairobiDateKey,
+  nairobiDayEarnings,
   partitionUsersByHiddenShare,
   RULLI_BASELINE_MONEY_KES,
   shiftDateKey,
@@ -410,6 +411,42 @@ describe("hidden user carve-out", () => {
       users,
     );
     expect(yesterdayPeriod.map((row) => row.id)).toEqual(["p2"]);
+  });
+});
+
+describe("nairobiDayEarnings", () => {
+  const rows = [
+    { id: "y1", usd: 20, at: "2026-11-21T10:00:00.000Z" },
+    { id: "y2", usd: 30, at: "2026-11-21T12:00:00.000Z" },
+    { id: "a", usd: 10, at: "2026-11-22T01:00:00.000Z" },
+    { id: "b", usd: 10, at: "2026-11-22T02:00:00.000Z" },
+    { id: "c", usd: 10, at: "2026-11-22T03:00:00.000Z" },
+    { id: "d", usd: 10, at: "2026-11-22T04:00:00.000Z" },
+    { id: "e", usd: 10, at: "2026-11-22T05:00:00.000Z" },
+    { id: "other", usd: 80, at: "2026-11-23T08:00:00.000Z" },
+  ];
+  const amount = (row: { usd: number }) => row.usd;
+  const at = (row: { at: string }) => row.at;
+
+  it("includes the retained cut in the full day total", () => {
+    const day = nairobiDayEarnings(rows, "2026-11-22", amount, at);
+    expect(day.chargesFee).toBe(true);
+    expect(day.paymentCount).toBe(5);
+    expect(day.fullUsd).toBe(50);
+    expect(day.hidden.map((row) => row.id)).toEqual(["e"]);
+    expect(day.hiddenUsd).toBe(10);
+    expect(day.visibleUsd).toBe(40);
+    expect(day.fullUsd).toBe(day.hiddenUsd + day.visibleUsd);
+  });
+
+  it("keeps days before the fee start fully visible", () => {
+    const day = nairobiDayEarnings(rows, "2026-11-21", amount, at);
+    expect(day.chargesFee).toBe(false);
+    expect(day.hidden).toEqual([]);
+    expect(day.hiddenUsd).toBe(0);
+    expect(day.fullUsd).toBe(50);
+    expect(day.visibleUsd).toBe(50);
+    expect(day.rows.map((row) => row.id)).toEqual(["y1", "y2"]);
   });
 });
 

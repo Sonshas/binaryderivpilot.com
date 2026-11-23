@@ -5,6 +5,8 @@ import {
   displayedEarnedTotalKes,
   formatEarnedKes,
   nairobiDateKey,
+  nairobiDayEarnings,
+  shiftDateKey,
   splitDepositEarnings,
   splitEqualPartners,
   splitEarnedTotalKes,
@@ -335,6 +337,7 @@ function RetainedShareSection() {
               <HiddenPaymentsTable rows={todayHidden} amountOf={amountOf} rate={rate} testId="superadmin-today-hidden-row" />
             )}
           </div>
+          <SuperadminDayEarnings rows={dash.collected} amountOf={amountOf} atOf={atOf} rate={rate} />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Recorded retained amount"
@@ -395,6 +398,223 @@ function RetainedShareSection() {
         </>
       ) : null}
     </Section>
+  )
+}
+
+function formatDayLabel(key: string): string {
+  const [year, month, day] = key.split('-').map(Number)
+  const date = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, 12))
+  return new Intl.DateTimeFormat('en-KE', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(date)
+}
+
+/** Full Nairobi-day earnings, including payments withheld from admin dashboards. */
+function SuperadminDayEarnings({
+  rows,
+  amountOf,
+  atOf,
+  rate,
+}: {
+  rows: DashboardDepositRow[]
+  amountOf: (row: DashboardDepositRow) => number
+  atOf: (row: DashboardDepositRow) => string
+  rate: number
+}) {
+  const today = nairobiDateKey(new Date().toISOString()) ?? '1970-01-01'
+  const yesterday = shiftDateKey(today, -1)
+  const [draftDay, setDraftDay] = useState(today)
+  const [selectedDay, setSelectedDay] = useState(today)
+  const earned = useMemo(
+    () => nairobiDayEarnings(rows, selectedDay, amountOf, atOf),
+    [rows, selectedDay, amountOf, atOf],
+  )
+  const hiddenIds = useMemo(() => new Set(earned.hidden.map((row) => row.id)), [earned.hidden])
+  const pool = useMemo(() => splitEqualPartners(earned.visibleUsd), [earned.visibleUsd])
+
+  function applyDay(next: string) {
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(next) && next <= today ? next : today
+    setDraftDay(day)
+    setSelectedDay(day)
+  }
+
+  return (
+    <div className="space-y-4" data-testid="superadmin-day-earnings">
+      <div className="space-y-1">
+        <h3 className="font-display text-base font-semibold text-paper">Money earned each day</h3>
+        <p className="text-sm text-mist">
+          Pick any Nairobi calendar day. The total is every completed payment that day, including the retained cut that stays off admin dashboards.
+        </p>
+      </div>
+      <form
+        className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+        onSubmit={(event) => {
+          event.preventDefault()
+          applyDay(draftDay)
+        }}
+      >
+        <div className="min-w-[12rem] flex-1 sm:max-w-xs">
+          <Input
+            label="Nairobi day"
+            type="date"
+            value={draftDay}
+            max={today}
+            onChange={(event) => setDraftDay(event.target.value)}
+            data-testid="superadmin-day-earnings-date"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" data-testid="superadmin-day-earnings-show">
+            Show day
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => applyDay(today)}
+            data-testid="superadmin-day-earnings-today"
+          >
+            Today
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => applyDay(yesterday)}
+            data-testid="superadmin-day-earnings-yesterday"
+          >
+            Yesterday
+          </Button>
+        </div>
+      </form>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="superadmin-day-earnings-stats">
+        <Stat
+          label={`Money earned · ${formatDayLabel(selectedDay)}`}
+          value={formatMoney(earned.fullUsd)}
+          subValue={formatKes(usdToKes(earned.fullUsd, rate))}
+          hint="Full total, including the retained cut"
+          tone="live"
+        />
+        <Card data-testid="superadmin-day-earnings-hidden">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">Retained cut</p>
+          <h3 className="mt-1 font-display text-base font-semibold text-paper">Hidden from admins</h3>
+          <p className="mt-3 font-mono text-xl font-semibold text-live">{formatMoney(earned.hiddenUsd)}</p>
+          <p className="mt-1 text-xs text-mist">{formatKes(usdToKes(earned.hiddenUsd, rate))}</p>
+          <p className="mt-1 text-xs text-mist">
+            {earned.hiddenCount} hidden payment{earned.hiddenCount === 1 ? '' : 's'}
+          </p>
+        </Card>
+        <Stat
+          label="Shared pool"
+          value={formatMoney(earned.visibleUsd)}
+          subValue={formatKes(usdToKes(earned.visibleUsd, rate))}
+          hint="What admins see for this day"
+        />
+        <Stat
+          label="Payments that day"
+          value={String(earned.paymentCount)}
+          hint={earned.paymentCount === 1 ? '1 completed payment' : `${earned.paymentCount} completed payments`}
+        />
+      </div>
+
+      {earned.chargesFee ? (
+        <p className="text-sm text-mist" data-testid="superadmin-day-earnings-fee-note">
+          {earned.hiddenCount === 0
+            ? 'No payment was set aside on this day’s retained cut.'
+            : `${formatMoney(earned.hiddenUsd)} of this day is retained and marked in the table below.`}
+        </p>
+      ) : (
+        <p className="text-sm text-mist" data-testid="superadmin-day-earnings-no-fee">
+          None of this day was retained. The full total is what admins see.
+        </p>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {pool.shares.map((share) => (
+          <Card key={share.key} data-testid={`superadmin-day-share-${share.key}`}>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">50% of the shared pool</p>
+            <h3 className="font-display text-base font-semibold text-paper">{share.key}</h3>
+            <p className="text-xs text-mist">{share.email}</p>
+            <p className="mt-3 font-mono text-xl font-semibold text-live">{formatMoney(share.netUsd)}</p>
+            <p className="mt-1 text-xs text-paper">Earned after 5% charge</p>
+            <p className="text-xs text-mist">{formatKes(usdToKes(share.netUsd, rate))}</p>
+            <p className="mt-2 text-xs text-mist">50% split {formatMoney(share.grossUsd)}</p>
+            <p className="text-xs text-mist">Receivers share 5% {formatMoney(share.chargeUsd)}</p>
+          </Card>
+        ))}
+      </div>
+
+      {earned.rows.length === 0 ? (
+        <p className="text-sm text-mist" data-testid="superadmin-day-earnings-empty">
+          No completed deposits on {formatDayLabel(selectedDay)}.
+        </p>
+      ) : (
+        <DayPaymentsTable
+          rows={earned.rows}
+          hiddenIds={hiddenIds}
+          amountOf={amountOf}
+          rate={rate}
+        />
+      )}
+    </div>
+  )
+}
+
+function DayPaymentsTable({
+  rows,
+  hiddenIds,
+  amountOf,
+  rate,
+}: {
+  rows: DashboardDepositRow[]
+  hiddenIds: Set<string>
+  amountOf: (row: DashboardDepositRow) => number
+  rate: number
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-line">
+      <table className="w-full min-w-[720px] text-left text-sm">
+        <thead className={tableHead}>
+          <tr>
+            <th className={th}>Who paid</th>
+            <th className={th}>Payment</th>
+            <th className={th}>Amount</th>
+            <th className={th}>Retained</th>
+            <th className={th}>Credited</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const retained = hiddenIds.has(row.id)
+            return (
+              <tr key={row.id} className="border-b border-line/60 last:border-0" data-testid="superadmin-day-payment-row">
+                <td className={td}>{row.userEmail ?? 'No email on file'}</td>
+                <td className={td}>{row.payment || 'Deposit'}</td>
+                <td className={`${td} font-mono`}>
+                  <span className="block">{formatMoney(amountOf(row))}</span>
+                  <span className="mt-0.5 block text-xs text-mist">
+                    {formatKes(row.amountKes != null ? row.amountKes : usdToKes(amountOf(row), rate))}
+                  </span>
+                </td>
+                <td className={td}>
+                  {retained ? (
+                    <span data-testid="superadmin-day-payment-retained">
+                      <Badge tone="warn">Retained</Badge>
+                    </span>
+                  ) : (
+                    <span className="text-mist">Visible to admins</span>
+                  )}
+                </td>
+                <td className={`${td} text-mist`}>{when(row.creditedAt ?? row.createdAt)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
