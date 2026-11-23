@@ -200,6 +200,7 @@ export function SuperAdminPanel() {
       />
       {error ? <Alert tone="danger">{error}</Alert> : null}
       {loading && !data ? <Skeleton className="h-40" /> : null}
+      <DayEarningsSection />
       <RetainedShareSection />
       {data ? (
         <>
@@ -213,6 +214,48 @@ export function SuperAdminPanel() {
         </>
       ) : null}
     </div>
+  )
+}
+
+/** First block on the unlocked superadmin page. The date controls stay visible even if payments fail to load. */
+function DayEarningsSection() {
+  const [dash, setDash] = useState<AdminDashboard | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const rate = depositFxRate()
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    void adminDashboardService.loadRetained().then((result) => {
+      if (cancelled) return
+      setLoading(false)
+      if (result.ok) {
+        setDash(result.data)
+        setError(null)
+      } else {
+        setDash(null)
+        setError(result.error === 'Forbidden' ? 'Could not load retained-share deposits.' : result.error)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const amountOf = useCallback((row: DashboardDepositRow) => depositRowUsd(row, rate), [rate])
+  const atOf = useCallback((row: DashboardDepositRow) => row.creditedAt ?? row.createdAt ?? '', [])
+
+  return (
+    <Section
+      title="Money earned each day"
+      subtitle="Full earnings for any Nairobi day, including the retained cut that stays off admin dashboards."
+      testId="superadmin-day-earnings-section"
+    >
+      {loading && !dash ? <p className="text-sm text-mist">Loading this day’s payments…</p> : null}
+      {error ? <Alert tone="danger">{error}</Alert> : null}
+      <SuperadminDayEarnings rows={dash?.collected ?? []} amountOf={amountOf} atOf={atOf} rate={rate} />
+    </Section>
   )
 }
 
@@ -337,7 +380,6 @@ function RetainedShareSection() {
               <HiddenPaymentsTable rows={todayHidden} amountOf={amountOf} rate={rate} testId="superadmin-today-hidden-row" />
             )}
           </div>
-          <SuperadminDayEarnings rows={dash.collected} amountOf={amountOf} atOf={atOf} rate={rate} />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Recorded retained amount"
@@ -444,12 +486,6 @@ function SuperadminDayEarnings({
 
   return (
     <div className="space-y-4" data-testid="superadmin-day-earnings">
-      <div className="space-y-1">
-        <h3 className="font-display text-base font-semibold text-paper">Money earned each day</h3>
-        <p className="text-sm text-mist">
-          Pick any Nairobi calendar day. The total is every completed payment that day, including the retained cut that stays off admin dashboards.
-        </p>
-      </div>
       <form
         className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
         onSubmit={(event) => {
