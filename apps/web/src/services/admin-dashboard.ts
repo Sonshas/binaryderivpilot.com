@@ -31,12 +31,18 @@ export interface DashboardDepositRow {
 export interface AdminDashboard {
   users: DashboardUserRow[]
   collected: DashboardDepositRow[]
+  hidden: DashboardDepositRow[]
   other: DashboardDepositRow[]
   totals: {
     collectedUsd: number | null
     collectedKes: number | null
     collectedCount: number
+    earnedTotalKes: number | null
     userCount: number
+    usersToday: number
+    usersYesterday: number
+    usersWeek: number
+    usersMonth: number
   }
 }
 
@@ -100,18 +106,24 @@ function mapDashboard(data: Record<string, unknown>): AdminDashboard {
   return {
     users,
     collected: mapList(data.collected, mapDeposit),
+    hidden: mapList(data.hidden, mapDeposit),
     other: mapList(data.other, mapDeposit),
     totals: {
       collectedUsd: money(totals.collected_usd),
       collectedKes: money(totals.collected_kes),
       collectedCount: Number(totals.collected_count ?? 0) || 0,
-      userCount: Number(totals.user_count ?? users.length) || users.length,
+      earnedTotalKes: money(totals.earned_total_kes) ?? money(totals.collected_kes),
+      userCount: Number(totals.user_count),
+      usersToday: Number(totals.users_today),
+      usersYesterday: Number(totals.users_yesterday),
+      usersWeek: Number(totals.users_week),
+      usersMonth: Number(totals.users_month),
     },
   }
 }
 
 /** Bearer from local storage, so the dashboard does not wait on the Auth lock. */
-async function loadOverviewDirect(): Promise<Result<AdminDashboard> | null> {
+async function loadOverviewDirect(scope?: 'retained'): Promise<Result<AdminDashboard> | null> {
   const api = supabaseApiAuth()
   const token = peekStoredAccessToken()
   if (!api || !token) return null
@@ -125,7 +137,7 @@ async function loadOverviewDirect(): Promise<Result<AdminDashboard> | null> {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: 'overview' }),
+        body: JSON.stringify(scope ? { action: 'overview', scope } : { action: 'overview' }),
       }),
       LOAD_MS,
       'Could not load the dashboard.',
@@ -147,19 +159,26 @@ async function loadOverviewDirect(): Promise<Result<AdminDashboard> | null> {
 
 export const adminDashboardService = {
   async load(): Promise<Result<AdminDashboard>> {
+    return loadWithRetry()
+  },
+  async loadRetained(): Promise<Result<AdminDashboard>> {
+    return loadWithRetry('retained')
+  },
+}
+
+async function loadWithRetry(scope?: 'retained'): Promise<Result<AdminDashboard>> {
     // Bearer from local storage. functions.invoke waits on the Auth lock and
     // getSession, which is the path that bounced /admin back to /login.
-    let last = await loadOverviewDirect()
+    let last = await loadOverviewDirect(scope)
     if (last?.ok) return last
     if (!last) return { ok: false, error: 'Sign in as an admin.' }
     // Quiet retries — /admin also fires profile hydrate; deferred
     // is_superadmin / system-health still land near the first overview.
     for (const waitMs of [1_800, 3_000]) {
       await new Promise((resolve) => globalThis.setTimeout(resolve, waitMs))
-      const again = await loadOverviewDirect()
+      const again = await loadOverviewDirect(scope)
       if (again?.ok) return again
       if (again) last = again
     }
     return last
-  },
 }

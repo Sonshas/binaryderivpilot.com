@@ -39,6 +39,7 @@ describe('summarizePeriods', () => {
     expect(summarizePeriods([], NOW)).toEqual({
       total: { count: 0, usd: 0 },
       today: { count: 0, usd: 0 },
+      yesterday: { count: 0, usd: 0 },
       week: { count: 0, usd: 0 },
       month: { count: 0, usd: 0 },
     })
@@ -57,6 +58,7 @@ describe('summarizePeriods', () => {
     const s = summarizePeriods(rows, NOW)
     expect(s.total).toEqual({ count: 6, usd: 120.5 })
     expect(s.today).toEqual({ count: 3, usd: 15.5 })
+    expect(s.yesterday).toEqual({ count: 1, usd: 3 })
     expect(s.week).toEqual({ count: 4, usd: 18.5 })
     expect(s.month).toEqual({ count: 5, usd: 20.5 })
   })

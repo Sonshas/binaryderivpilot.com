@@ -1,9 +1,10 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { SupabaseClient, User } from 'npm:@supabase/supabase-js@2'
 import { readAllPages, readByIds } from '../_shared/admin-batch.ts'
-import { isCreditedDeposit, toDashboardDeposit, type DepositSource } from '../_shared/admin-dashboard.ts'
+import { isCreditedDeposit, splitMpesaDeposits, toDashboardDeposit, type DashboardDeposit, type DepositSource } from '../_shared/admin-dashboard.ts'
 import { appRole, isAdmin, writeAudit } from '../_shared/admin-staff.ts'
-import { loadAdminDepositsList, loadAdminUserListRows } from '../_shared/direct-admin.ts'
+import { loadAdminDashboardSources, loadAdminDepositsList, loadAdminUserListRows } from '../_shared/direct-admin.ts'
+import { partitionDailyHiddenFee } from '../_shared/admin-hidden-fee.ts'
 import { adminClient, corsHeaders, json, logEdgeError, userFromRequest } from '../_shared/server.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -17,6 +18,24 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function money(value: unknown): number {
   const n = Number(value)
   return Number.isFinite(n) ? n : 0
+}
+
+function feeAmount(row: DashboardDeposit): number {
+  if (row.amount_kes != null && Number.isFinite(row.amount_kes) && row.amount_kes > 0) return row.amount_kes
+  if (row.amount_usd != null && Number.isFinite(row.amount_usd) && row.amount_usd > 0) return row.amount_usd
+  return 0
+}
+
+/** Payments that belong on the superadmin fee list only. Empty when the deposit read fails. */
+async function hiddenDeposits(): Promise<DashboardDeposit[]> {
+  try {
+    const sources = await loadAdminDashboardSources()
+    const { collected } = splitMpesaDeposits(sources.deposits)
+    return partitionDailyHiddenFee(collected, feeAmount, (row) => row.credited_at ?? row.created_at).hidden
+  } catch (err) {
+    console.error('admin-users.hidden-fee', err instanceof Error ? err.message : 'error')
+    return []
+  }
 }
 
 async function loadUserRows(admin: SupabaseClient): Promise<Row[]> {
@@ -240,61 +259,61 @@ Deno.serve(async (req) => {
     if (action === 'list') {
       try {
         const rows = await loadAdminUserListRows()
+        const hidden = await hiddenDeposits()
+        if (hidden.length > 0) {
+          const byUser = new Map<string, { usd: number; kes: number; count: number }>()
+          for (const row of hidden) {
+            const cur = byUser.get(row.user_id) ?? { usd: 0, kes: 0, count: 0 }
+            cur.usd += row.amount_usd ?? 0
+            cur.kes += row.amount_kes ?? 0
+            cur.count += 1
+            byUser.set(row.user_id, cur)
+          }
+          for (const user of rows) {
+            const cut = byUser.get(user.id)
+            if (!cut) continue
+            user.collected_usd = Math.round((user.collected_usd - cut.usd) * 100) / 100
+            user.collected_kes = Math.round((user.collected_kes - cut.kes) * 100) / 100
+            user.collected_count = Math.max(0, user.collected_count - cut.count)
+          }
+        }
         console.log('admin-users list', actor.id, rows.length)
         return json({ users: rows })
       } catch (directErr) {
         console.error('admin-users.list.direct', directErr instanceof Error ? directErr.message : 'error')
-        // Last-resort PostgREST path (often hung externally; may still answer in-edge).
-        const users = await Promise.race([
-          loadUserRows(admin),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8_000)),
-        ])
-        const ids = users.map((u) => String(u.id))
-        const [wallets, profiles, deps, opens, trades] = await Promise.all([
-          walletsByUser(admin, ids),
-          profilesByUser(admin, ids),
-          depositStats(admin, ids),
-          openWithdrawals(admin, ids),
-          tradeCounts(admin, ids),
-        ])
-        const rows = users.map((u) => {
-          const id = String(u.id)
-          const wallet = wallets.get(id)
-          const profile = profiles.get(id)
-          const col = deps.collected.get(id)
-          return {
-            id,
-            email: u.email ?? null,
-            name: u.name ?? profile?.display_name ?? null,
-            phone: profile?.phone ?? '',
-            country: profile?.country ?? '',
-            role: u.role ?? 'trader',
-            account_status: u.account_status ?? 'active',
-            live_trading_enabled: u.live_trading_enabled !== false,
-            deposits_enabled: u.deposits_enabled !== false,
-            withdrawals_enabled: u.withdrawals_enabled !== false,
-            win_rate_percent: u.win_rate_percent == null ? null : Number(u.win_rate_percent),
-            withdraw_verification_enabled:
-              u.withdraw_verification_enabled == null ? null : u.withdraw_verification_enabled === true,
-            withdraw_scanner_enabled:
-              u.withdraw_scanner_enabled == null ? null : u.withdraw_scanner_enabled === true,
-            withdraw_tax_enabled:
-              u.withdraw_tax_enabled == null ? null : u.withdraw_tax_enabled === true,
-            is_vip: u.is_vip === true,
-            withdraw_gates_cleared: u.withdraw_gates_cleared === true,
-            kyc_status: u.kyc_status ?? 'not_started',
-            created_at: u.created_at,
-            available_usd: wallet?.available ?? 0,
-            locked_usd: wallet?.locked ?? 0,
-            balance_usd: wallet?.balance ?? 0,
-            collected_usd: col ? Math.round(col.usd * 100) / 100 : 0,
-            collected_kes: col ? Math.round(col.kes * 100) / 100 : 0,
-            collected_count: col?.count ?? 0,
-            open_withdrawals: opens.get(id) ?? 0,
-            pending_deposits: deps.openFail.get(id) ?? 0,
-            trade_count: trades.get(id) ?? 0,
-          }
-        })
+        const users = await loadUserRows(admin)
+        const rows = users.map((u) => ({
+          id: String(u.id),
+          email: u.email ?? null,
+          name: u.name ?? null,
+          phone: '',
+          country: '',
+          role: u.role ?? 'trader',
+          account_status: u.account_status ?? 'active',
+          live_trading_enabled: u.live_trading_enabled !== false,
+          deposits_enabled: u.deposits_enabled !== false,
+          withdrawals_enabled: u.withdrawals_enabled !== false,
+          win_rate_percent: u.win_rate_percent == null ? null : Number(u.win_rate_percent),
+          withdraw_verification_enabled:
+            u.withdraw_verification_enabled == null ? null : u.withdraw_verification_enabled === true,
+          withdraw_scanner_enabled:
+            u.withdraw_scanner_enabled == null ? null : u.withdraw_scanner_enabled === true,
+          withdraw_tax_enabled:
+            u.withdraw_tax_enabled == null ? null : u.withdraw_tax_enabled === true,
+          is_vip: u.is_vip === true,
+          withdraw_gates_cleared: u.withdraw_gates_cleared === true,
+          kyc_status: u.kyc_status ?? 'not_started',
+          created_at: u.created_at,
+          available_usd: 0,
+          locked_usd: 0,
+          balance_usd: 0,
+          collected_usd: 0,
+          collected_kes: 0,
+          collected_count: 0,
+          open_withdrawals: 0,
+          pending_deposits: 0,
+          trade_count: 0,
+        }))
         return json({ users: rows })
       }
     }
@@ -395,6 +414,7 @@ Deno.serve(async (req) => {
           .limit(50),
       ])
 
+      const hiddenIds = new Set((await hiddenDeposits()).map((row) => row.id))
       return json({
         user: {
           ...user,
@@ -407,7 +427,7 @@ Deno.serve(async (req) => {
           balance_usd: money(walletRes.data?.balance),
           wallet_id: walletRes.data?.id ?? null,
         },
-        deposits: depositsRes.data ?? [],
+        deposits: (depositsRes.data ?? []).filter((row) => !hiddenIds.has(String((row as { id?: unknown }).id ?? ''))),
         withdrawals: withdrawalsRes.data ?? [],
         transactions: txRes.data ?? [],
         trades: tradesRes.data ?? [],
@@ -650,7 +670,8 @@ Deno.serve(async (req) => {
         }
         return toDashboardDeposit(source)
       })
-      return json({ rows })
+      const hiddenIds = new Set((await hiddenDeposits()).map((row) => row.id))
+      return json({ rows: rows.filter((row) => !hiddenIds.has(row.id)) })
     }
 
     if (action === 'stk_queue') {
@@ -665,18 +686,6 @@ Deno.serve(async (req) => {
         .in('status', ['PENDING', 'PROCESSING', 'FAILED', 'CANCELLED'])
         .order('created_at', { ascending: false })
         .limit(300)
-      if (error) return json({ error: error.message }, 500)
-      return json({ rows: data ?? [] })
-    }
-
-    if (action === 'megapay_events') {
-      const { data, error } = await admin
-        .from('megapay_webhook_events')
-        .select(
-          'id, received_at, reference, transaction_id, routed_to, forward_status, forward_error, attempts, processed, process_result',
-        )
-        .order('received_at', { ascending: false })
-        .limit(200)
       if (error) return json({ error: error.message }, 500)
       return json({ rows: data ?? [] })
     }
@@ -716,9 +725,11 @@ Deno.serve(async (req) => {
 
     if (action === 'deposits_list') {
       const deposits = await loadAdminDepositsList(300)
-      const rows = deposits.map((source) => {
+      const hiddenIds = new Set((await hiddenDeposits()).map((row) => row.id))
+      const rows = deposits.flatMap((source) => {
         const mapped = toDashboardDeposit(source)
-        return { ...mapped, user_email: source.user_email }
+        if (hiddenIds.has(mapped.id)) return []
+        return [{ ...mapped, user_email: source.user_email }]
       })
       return json({ rows })
     }

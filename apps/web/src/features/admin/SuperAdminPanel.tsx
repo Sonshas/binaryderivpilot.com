@@ -1,8 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert, Badge, Button, Card, Input, Modal, PageHeader, Skeleton, Stat, Tabs } from '@/components/ui'
+import {
+  displayedEarnedTotalKes,
+  formatEarnedKes,
+  nairobiDateKey,
+  splitDepositEarnings,
+  splitEqualPartners,
+  splitEarnedTotalKes,
+} from '@/domain/admin-earnings'
 import { usdToKesAt, type PeriodSeries, type PeriodSummary } from '@/domain/admin-panel'
+import { kesToUsd } from '@/domain/megapay'
+import { usdToKes } from '@/domain/withdrawals'
+import { formatKes } from '@/features/payments/MoneyPair'
 import { formatMoney } from '@/lib/format'
+import { useSuperadminUnlock } from '@/hooks/useSuperadminUnlock'
+import { readSavedHostFees } from '@/services/admin-fees'
+import {
+  adminDashboardService,
+  type AdminDashboard,
+  type DashboardDepositRow,
+} from '@/services/admin-dashboard'
 import {
   adminPanelService,
   type AdminPanelOverview,
@@ -19,6 +37,19 @@ import {
   parsePercentInput,
   settledPercent,
 } from '@/features/admin/super-admin-model'
+
+const DEFAULT_DEPOSIT_RATE = 130
+
+function depositFxRate(): number {
+  const rate = readSavedHostFees()?.deposit.kesPerUsd
+  return Number.isFinite(rate) && (rate as number) > 0 ? (rate as number) : DEFAULT_DEPOSIT_RATE
+}
+
+function depositRowUsd(row: DashboardDepositRow, rate: number): number {
+  if (row.amountUsd != null) return row.amountUsd
+  if (row.amountKes != null) return kesToUsd(row.amountKes, rate)
+  return 0
+}
 
 const PAGE_SIZE = 100
 
@@ -49,11 +80,57 @@ function Section({ title, subtitle, children, testId }: { title: string; subtitl
   )
 }
 
+function SuperadminUnlockGate({
+  onUnlock,
+}: {
+  onUnlock: (password: string) => boolean
+}) {
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    if (onUnlock(password)) {
+      setError(null)
+      setPassword('')
+      return
+    }
+    setError('Incorrect password.')
+  }
+
+  return (
+    <div className="space-y-8" data-testid="superadmin-unlock-gate">
+      <PageHeader
+        title="Superadmin"
+        subtitle="Enter the superadmin password to unlock the full panel and hidden earnings for this session."
+      />
+      <Card className="max-w-md space-y-4">
+        <form className="space-y-4" onSubmit={submit}>
+          <Input
+            label="Superadmin password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            data-testid="superadmin-unlock-password"
+          />
+          {error ? <Alert tone="danger">{error}</Alert> : null}
+          <Button type="submit" data-testid="superadmin-unlock-submit">
+            Unlock
+          </Button>
+        </form>
+      </Card>
+    </div>
+  )
+}
+
 /**
  * Superadmin console. Rendered only after RequireStaff + RequireSuperadmin; every read and write is
  * re-checked server-side. Only virtual Demo balances and the Demo win rate are editable.
+ * Client password unlock is required before the panel (and hidden earnings elsewhere) open.
  */
 export function SuperAdminPanel() {
+  const { unlocked, unlock, lock, canAttempt } = useSuperadminUnlock()
   const [data, setData] = useState<AdminPanelOverview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -73,6 +150,10 @@ export function SuperAdminPanel() {
   }, [])
 
   useEffect(() => {
+    if (!unlocked) {
+      setData(null)
+      return
+    }
     void load()
     const unsubscribe = adminPanelService.subscribe(() => {
       setLive(true)
@@ -83,7 +164,20 @@ export function SuperAdminPanel() {
       unsubscribe()
       if (timer.current) window.clearTimeout(timer.current)
     }
-  }, [load])
+  }, [load, unlocked])
+
+  if (!canAttempt) {
+    return (
+      <div data-testid="superadmin-denied">
+        <PageHeader title="Forbidden" />
+        <Alert tone="danger">This section is limited to the superadmin account.</Alert>
+      </div>
+    )
+  }
+
+  if (!unlocked) {
+    return <SuperadminUnlockGate onUnlock={unlock} />
+  }
 
   return (
     <div className="space-y-8" data-testid="super-admin-panel">
@@ -93,6 +187,9 @@ export function SuperAdminPanel() {
         actions={
           <div className="flex items-center gap-2">
             {live ? <Badge tone="call">Live</Badge> : null}
+            <Button type="button" variant="secondary" onClick={() => lock()} data-testid="superadmin-lock">
+              Lock
+            </Button>
             <Button type="button" variant="secondary" onClick={() => void load()} disabled={loading} data-testid="admin-panel-refresh">
               {loading ? 'Refreshing…' : 'Refresh'}
             </Button>
@@ -101,6 +198,7 @@ export function SuperAdminPanel() {
       />
       {error ? <Alert tone="danger">{error}</Alert> : null}
       {loading && !data ? <Skeleton className="h-40" /> : null}
+      <RetainedShareSection />
       {data ? (
         <>
           <DepositsSection data={data} />
@@ -112,6 +210,232 @@ export function SuperAdminPanel() {
           <p className="text-xs text-mist">Generated {when(data.generatedAt)}</p>
         </>
       ) : null}
+    </div>
+  )
+}
+
+/** Unlocked Sonshas only: retained card, carved payments, and full totals. */
+function RetainedShareSection() {
+  const [dash, setDash] = useState<AdminDashboard | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const rate = depositFxRate()
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    void adminDashboardService.loadRetained().then((result) => {
+      if (cancelled) return
+      setLoading(false)
+      if (result.ok) {
+        setDash(result.data)
+        setError(null)
+      } else {
+        setDash(null)
+        setError(result.error === 'Forbidden' ? 'Could not load retained-share deposits.' : result.error)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const amountOf = useCallback((row: DashboardDepositRow) => depositRowUsd(row, rate), [rate])
+  const atOf = useCallback((row: DashboardDepositRow) => row.creditedAt ?? row.createdAt ?? '', [])
+
+  const fullUsd = useMemo(() => {
+    if (!dash) return 0
+    return Math.round(
+      (dash.collected.reduce((sum, row) => sum + amountOf(row), 0) + Number.EPSILON) * 100,
+    ) / 100
+  }, [dash, amountOf])
+
+  const split = useMemo(() => splitDepositEarnings(fullUsd), [fullUsd])
+
+  const hiddenRows = useMemo(() => dash?.hidden ?? [], [dash])
+
+  const hiddenPaymentsUsd = useMemo(
+    () => Math.round((hiddenRows.reduce((sum, row) => sum + amountOf(row), 0) + Number.EPSILON) * 100) / 100,
+    [hiddenRows, amountOf],
+  )
+  const today = nairobiDateKey(new Date().toISOString()) ?? '1970-01-01'
+  const todayRows = useMemo(() => {
+    if (!dash) return []
+    return dash.collected.filter((row) => nairobiDateKey(atOf(row)) === today)
+  }, [dash, atOf, today])
+  const todayUsd = useMemo(
+    () => Math.round((todayRows.reduce((sum, row) => sum + amountOf(row), 0) + Number.EPSILON) * 100) / 100,
+    [todayRows, amountOf],
+  )
+  const todayHidden = useMemo(
+    () => (dash?.hidden ?? []).filter((row) => nairobiDateKey(atOf(row)) === today),
+    [dash, atOf, today],
+  )
+  const todayHiddenUsd = useMemo(
+    () => Math.round((todayHidden.reduce((sum, row) => sum + amountOf(row), 0) + Number.EPSILON) * 100) / 100,
+    [todayHidden, amountOf],
+  )
+  const todaySplit = useMemo(
+    () => splitEqualPartners(Math.max(0, todayUsd - todayHiddenUsd)),
+    [todayUsd, todayHiddenUsd],
+  )
+  const earnedSplit = useMemo(
+    () => splitEarnedTotalKes(displayedEarnedTotalKes(dash?.totals.earnedTotalKes)),
+    [dash?.totals.earnedTotalKes],
+  )
+
+  return (
+    <Section
+      title="Retained share"
+      subtitle="Visible only while Superadmin is unlocked. Today's retained cut, its payments, and the lifetime retained amount stay off admin dashboards."
+      testId="superadmin-retained-share"
+    >
+      {loading && !dash ? <Skeleton className="h-28" /> : null}
+      {error ? <Alert tone="danger">{error}</Alert> : null}
+      {dash ? (
+        <>
+          <div className="space-y-3" data-testid="superadmin-today-cut">
+            <h3 className="font-display text-base font-semibold text-paper">Today's retained cut</h3>
+            <p className="text-sm text-mist">
+              Nairobi day {today}. This cut of today's completed payments stays off admin dashboards.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat
+                label="Today's earnings"
+                value={formatMoney(todayUsd)}
+                subValue={formatKes(usdToKes(todayUsd, rate))}
+                hint={`${todayRows.length} completed payment${todayRows.length === 1 ? '' : 's'}`}
+                tone="live"
+              />
+              <Card data-testid="superadmin-today-hidden">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">Today's retained cut</p>
+                <h3 className="mt-1 font-display text-base font-semibold text-paper">sonshasopunga</h3>
+                <p className="text-xs text-mist">Hidden from admins</p>
+                <p className="mt-3 font-mono text-xl font-semibold text-live">{formatMoney(todayHiddenUsd)}</p>
+                <p className="mt-1 text-xs text-mist">{formatKes(usdToKes(todayHiddenUsd, rate))}</p>
+                <p className="mt-1 text-xs text-mist">
+                  {formatMoney(todayHiddenUsd)} across {todayHidden.length} hidden payment{todayHidden.length === 1 ? '' : 's'}
+                </p>
+              </Card>
+              {todaySplit.shares.map((share) => (
+                <Stat
+                  key={share.key}
+                  label={`${share.key} 50%`}
+                  value={formatMoney(share.netUsd)}
+                  subValue={formatKes(usdToKes(share.netUsd, rate))}
+                  hint="Earned after the 5% receivers share"
+                />
+              ))}
+            </div>
+            {todayHidden.length === 0 ? (
+              <p className="text-sm text-mist" data-testid="superadmin-today-hidden-empty">
+                No payments have been set aside on today's retained cut yet.
+              </p>
+            ) : (
+              <HiddenPaymentsTable rows={todayHidden} amountOf={amountOf} rate={rate} testId="superadmin-today-hidden-row" />
+            )}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat
+              label="Recorded retained amount"
+              value={formatEarnedKes(earnedSplit.hiddenKes)}
+              hint="Kept off admin dashboards"
+              tone="live"
+            />
+        <Stat
+          label="Total earned"
+          value={formatEarnedKes(displayedEarnedTotalKes(dash.totals.earnedTotalKes))}
+          hint="Total earned"
+          tone="live"
+        />
+            <Card data-testid="superadmin-share-hidden">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">Retained</p>
+              <h3 className="mt-1 font-display text-base font-semibold text-paper">sonshasopunga</h3>
+              <p className="text-xs text-mist">Hidden share (not shown to rulli)</p>
+              <p className="mt-3 font-mono text-xl font-semibold text-live">{formatMoney(hiddenPaymentsUsd)}</p>
+              <p className="mt-1 text-xs text-mist">{formatKes(usdToKes(hiddenPaymentsUsd, rate))}</p>
+            </Card>
+            <Stat
+              label="Shared pool"
+              value={formatMoney(split.sharedUsd)}
+              subValue={formatKes(usdToKes(split.sharedUsd, rate))}
+              hint="Split 50% and 50%"
+            />
+            <Stat
+              label="Carved payments"
+              value={String(hiddenRows.length)}
+              hint={`${formatMoney(hiddenPaymentsUsd)} charged on daily incoming payments`}
+            />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {split.shares.map((share) => (
+              <Card key={share.key} data-testid={`superadmin-share-${share.key}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">50%</p>
+                <h3 className="mt-1 font-display text-base font-semibold text-paper">{share.key}</h3>
+                <p className="text-xs text-mist">{share.email}</p>
+                <p className="mt-3 font-mono text-xl font-semibold text-live">{formatMoney(share.netUsd)}</p>
+                <p className="mt-1 text-xs text-paper">Earned after 5% charge</p>
+                <p className="text-xs text-mist">{formatKes(usdToKes(share.netUsd, rate))}</p>
+                <p className="mt-2 text-xs text-mist">50% split {formatMoney(share.grossUsd)}</p>
+                <p className="text-xs text-mist">Receivers share 5% {formatMoney(share.chargeUsd)}</p>
+              </Card>
+            ))}
+          </div>
+          <div className="space-y-2" data-testid="superadmin-hidden-payments">
+            <h3 className="font-display text-base font-semibold text-paper">Hidden payments (carved out)</h3>
+            <p className="text-sm text-mist">
+              From 22 Nov 2026, a portion of each day's payments is hidden here and stays hidden after that day ends. Days before that are shown in full to admins.
+            </p>
+            {hiddenRows.length === 0 ? (
+              <p className="text-sm text-mist">No carved payments in the current deposit list.</p>
+            ) : (
+              <HiddenPaymentsTable rows={hiddenRows} amountOf={amountOf} rate={rate} testId="superadmin-hidden-payment-row" />
+            )}
+          </div>
+        </>
+      ) : null}
+    </Section>
+  )
+}
+
+function HiddenPaymentsTable({
+  rows,
+  amountOf,
+  rate,
+  testId,
+}: {
+  rows: DashboardDepositRow[]
+  amountOf: (row: DashboardDepositRow) => number
+  rate: number
+  testId: string
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-line">
+      <table className="w-full min-w-[640px] text-left text-sm">
+        <thead className={tableHead}>
+          <tr>
+            <th className={th}>Who paid</th>
+            <th className={th}>Payment</th>
+            <th className={th}>Amount</th>
+            <th className={th}>Credited</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="border-b border-line/60 last:border-0" data-testid={testId}>
+              <td className={td}>{row.userEmail ?? 'No email on file'}</td>
+              <td className={td}>{row.payment || 'Deposit'}</td>
+              <td className={`${td} font-mono`}>
+                <span className="block">{formatMoney(amountOf(row))}</span>
+                <span className="mt-0.5 block text-xs text-mist">
+                  {formatKes(row.amountKes != null ? row.amountKes : usdToKes(amountOf(row), rate))}
+                </span>
+              </td>
+              <td className={`${td} text-mist`}>{when(row.creditedAt ?? row.createdAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -128,9 +452,10 @@ function DepositsSection({ data }: { data: AdminPanelOverview }) {
       subtitle={`Completed real M-Pesa deposits. KES at ${rate ? `${rate} KES / USD` : 'an unavailable rate'} (${data.rateSource}). Nairobi calendar days; weeks start Monday.`}
       testId="admin-panel-deposits"
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {card('All time', s.total)}
         {card('Today', s.today)}
+        {card('Yesterday', s.yesterday)}
         {card('This week', s.week)}
         {card('This month', s.month)}
       </div>

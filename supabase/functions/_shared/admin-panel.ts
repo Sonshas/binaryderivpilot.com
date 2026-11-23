@@ -21,6 +21,7 @@ export interface PeriodTotal {
 export interface PeriodSummary {
   total: PeriodTotal
   today: PeriodTotal
+  yesterday: PeriodTotal
   week: PeriodTotal
   month: PeriodTotal
 }
@@ -95,12 +96,15 @@ function totalSince(rows: { ms: number; usd: number }[], from: number, to = Numb
   return { count, usd: roundMoney(usd) }
 }
 
-/** All-time, today, this week (Mon–), and this month totals. Rows with usd = null count with $0. */
+/** All-time, today, yesterday, this week (Mon–), and this month totals. Rows with usd = null count with $0. */
 export function summarizePeriods(items: readonly DatedAmount[], now: number, offsetMinutes = PANEL_TZ_OFFSET_MINUTES): PeriodSummary {
   const rows = parsed(items)
+  const todayStart = startOfLocalDay(now, offsetMinutes)
+  const yesterdayStart = todayStart - DAY_MS
   return {
     total: totalSince(rows, Number.NEGATIVE_INFINITY),
-    today: totalSince(rows, startOfLocalDay(now, offsetMinutes)),
+    today: totalSince(rows, todayStart),
+    yesterday: totalSince(rows, yesterdayStart, todayStart),
     week: totalSince(rows, startOfLocalWeek(now, offsetMinutes)),
     month: totalSince(rows, startOfLocalMonth(now, offsetMinutes)),
   }

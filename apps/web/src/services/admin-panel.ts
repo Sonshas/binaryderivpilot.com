@@ -91,7 +91,13 @@ function summary(value: unknown): PeriodSummary {
     const t = (raw[key] ?? {}) as Raw
     return { count: num(t.count) ?? 0, usd: num(t.usd) ?? 0 }
   }
-  return { total: pick('total'), today: pick('today'), week: pick('week'), month: pick('month') }
+  return {
+    total: pick('total'),
+    today: pick('today'),
+    yesterday: pick('yesterday'),
+    week: pick('week'),
+    month: pick('month'),
+  }
 }
 
 function series(value: unknown): PeriodSeries {
