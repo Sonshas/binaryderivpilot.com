@@ -1,13 +1,18 @@
 /**
- * Prefix-stable daily hidden fee.
- * Each Nairobi day on or after DAILY_HIDDEN_FEE_FROM walks payments in arrival
- * order and permanently hides a whole payment only when it fits in the
- * remaining 20% budget. Later payments never reclassify an earlier one.
- * Days before the start date stay fully visible.
+ * Per-payment reporting split. The stored deposit and the M-Pesa credit stay gross.
+ * On Nairobi days on or after DAILY_HIDDEN_FEE_FROM, fee cents = round(gross cents * 20%)
+ * and net cents = gross cents - fee cents. The split depends only on that payment,
+ * so a later payment cannot change it. Earlier days stay gross = net, fee = 0.
  */
 export const HIDDEN_SHARE_RATE = 0.2;
 export const DAILY_HIDDEN_FEE_FROM = "2026-11-22";
 export const NAIROBI_TZ = "Africa/Nairobi";
+
+export interface ReportingSplit {
+  gross: number;
+  fee: number;
+  net: number;
+}
 
 export function nairobiDateKey(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -30,57 +35,86 @@ function toCents(amount: number): number {
   return Math.round((amount + Number.EPSILON) * 100);
 }
 
-function rowId(row: unknown): string {
-  if (row && typeof row === "object" && "id" in row) {
-    const id = (row as { id?: unknown }).id;
-    if (typeof id === "string") return id;
-    if (typeof id === "number") return String(id);
-  }
-  return "";
+function fromCents(cents: number): number {
+  return cents / 100;
 }
 
-function byArrival<T>(at: (row: T) => string): (a: T, b: T) => number {
-  return (a, b) => {
-    const ta = Date.parse(at(a));
-    const tb = Date.parse(at(b));
-    const aOk = Number.isFinite(ta);
-    const bOk = Number.isFinite(tb);
-    if (aOk && bOk && ta !== tb) return ta - tb;
-    if (aOk !== bOk) return aOk ? -1 : 1;
-    return rowId(a).localeCompare(rowId(b));
+/** Fixed 20% reporting split for one completed payment. */
+export function reportingSplit(
+  gross: number,
+  at: string | null | undefined,
+  hiddenRate = HIDDEN_SHARE_RATE,
+): ReportingSplit {
+  const grossCents = toCents(gross);
+  const feeCents = dayChargesHiddenFee(nairobiDateKey(at)) ? Math.round(grossCents * hiddenRate) : 0;
+  const netCents = Math.max(0, grossCents - feeCents);
+  return {
+    gross: fromCents(grossCents),
+    fee: fromCents(feeCents),
+    net: fromCents(netCents),
+  };
+}
+
+export interface SplitMoneyRow {
+  amount_kes: number | null;
+  amount_usd: number | null;
+  credited_at?: string | null;
+  created_at?: string | null;
+}
+
+export function splitRowAt(row: SplitMoneyRow): string {
+  return row.credited_at ?? row.created_at ?? "";
+}
+
+/** Admin payload: amount fields are the net. Gross and fee are not copied onto the row. */
+export function withNetAmounts<T extends SplitMoneyRow>(row: T): T {
+  const at = splitRowAt(row);
+  return {
+    ...row,
+    amount_kes: row.amount_kes == null ? null : reportingSplit(row.amount_kes, at).net,
+    amount_usd: row.amount_usd == null ? null : reportingSplit(row.amount_usd, at).net,
+  };
+}
+
+export interface AnnotatedSplitRow extends SplitMoneyRow {
+  gross_kes: number | null;
+  fee_kes: number | null;
+  net_kes: number | null;
+  gross_usd: number | null;
+  fee_usd: number | null;
+  net_usd: number | null;
+}
+
+/** Superadmin payload: gross stays in amount_*, and fee/net are explicit. */
+export function withExplicitSplit<T extends SplitMoneyRow>(row: T): T & AnnotatedSplitRow {
+  const at = splitRowAt(row);
+  const kes = row.amount_kes == null ? null : reportingSplit(row.amount_kes, at);
+  const usd = row.amount_usd == null ? null : reportingSplit(row.amount_usd, at);
+  return {
+    ...row,
+    gross_kes: kes?.gross ?? null,
+    fee_kes: kes?.fee ?? null,
+    net_kes: kes?.net ?? null,
+    gross_usd: usd?.gross ?? null,
+    fee_usd: usd?.fee ?? null,
+    net_usd: usd?.net ?? null,
+  };
+}
+
+/** One fee record. Amount fields are the fee only. Null when this payment has no fee. */
+export function feeRecord<T extends SplitMoneyRow>(row: T): (T & AnnotatedSplitRow) | null {
+  const annotated = withExplicitSplit(row);
+  if ((annotated.fee_kes ?? 0) <= 0 && (annotated.fee_usd ?? 0) <= 0) return null;
+  return {
+    ...annotated,
+    amount_kes: annotated.fee_kes,
+    amount_usd: annotated.fee_usd,
   };
 }
 
 /**
- * Hide a payment only when its whole amount fits in the running 20% budget.
- * Visible payments stay at their real amount forever.
- */
-function hiddenInArrivalOrder<T>(
-  rows: T[],
-  amount: (row: T) => number,
-  at: (row: T) => string,
-  hiddenRate: number,
-): Set<T> {
-  const hidden = new Set<T>();
-  let total = 0;
-  let hiddenCents = 0;
-  for (const row of [...rows].sort(byArrival(at))) {
-    const value = toCents(amount(row));
-    const next = total + value;
-    const budget = Math.round(next * hiddenRate) - hiddenCents;
-    if (value > 0 && value <= budget) {
-      hidden.add(row);
-      hiddenCents += value;
-    }
-    total = next;
-  }
-  return hidden;
-}
-
-/**
- * Charge the hidden fee separately on every Nairobi day on or after
- * {@link DAILY_HIDDEN_FEE_FROM}. Earlier days stay whole.
- * Returned lists keep the input order.
+ * Every payment stays visible. Hidden is the set that carries a fee (superadmin fee list),
+ * not payments removed from the admin list.
  */
 export function partitionDailyHiddenFee<T>(
   rows: T[],
@@ -88,24 +122,6 @@ export function partitionDailyHiddenFee<T>(
   at: (row: T) => string,
   hiddenRate = HIDDEN_SHARE_RATE,
 ): { visible: T[]; hidden: T[] } {
-  const groups = new Map<string, T[]>();
-  const exempt: T[] = [];
-  for (const row of rows) {
-    const key = nairobiDateKey(at(row));
-    if (!dayChargesHiddenFee(key)) {
-      exempt.push(row);
-      continue;
-    }
-    const list = groups.get(key as string) ?? [];
-    list.push(row);
-    groups.set(key as string, list);
-  }
-  const hidden = new Set<T>();
-  for (const dayRows of groups.values()) {
-    for (const row of hiddenInArrivalOrder(dayRows, amount, at, hiddenRate)) hidden.add(row);
-  }
-  return {
-    visible: rows.filter((row) => !hidden.has(row)),
-    hidden: rows.filter((row) => hidden.has(row)),
-  };
+  const hidden = rows.filter((row) => reportingSplit(amount(row), at(row), hiddenRate).fee > 0);
+  return { visible: rows, hidden };
 }

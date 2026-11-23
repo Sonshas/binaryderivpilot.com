@@ -1,10 +1,15 @@
-import { partitionDailyHiddenFee as partitionStableDailyHiddenFee } from "@/domain/admin-hidden-fee";
+import {
+  partitionDailyHiddenFee as partitionStableDailyHiddenFee,
+  reportingSplit,
+} from "@/domain/admin-hidden-fee";
+
+export { reportingSplit } from "@/domain/admin-hidden-fee";
 
 /**
- * Real earnings: 20% is kept for superadmin only.
- * Both admin accounts see the remaining pool as the whole total, split 50/50.
- * The daily carve is prefix-stable: a payment is hidden or shown when it
- * arrives and later payments never change that decision.
+ * Real earnings: 20% of each completed payment on or after 22 Nov 2026 is a
+ * reporting fee for superadmin only. Admins see that payment's net.
+ * Fee cents are round(gross cents * 20%) and do not change when later payments arrive.
+ * Both admin accounts then split the net pool 50/50.
  */
 export const EARNINGS_ADMINS = [
   {
@@ -473,8 +478,8 @@ export function hiddenUserIdsForViewer<T extends { id: string }>(
 }
 
 /**
- * Carve ~20% of one combined deposit list into a hidden bucket.
- * Daily incoming payments use {@link partitionDailyHiddenFee} instead, one Nairobi day at a time.
+ * Every payment stays in `visible`. `hidden` is the payments that carry a fee.
+ * `hiddenUsd` is the sum of those per-payment fees, not the gross of omitted rows.
  */
 export function partitionDepositsByHiddenShare<T extends { id: string }>(
   rows: T[],
@@ -484,7 +489,10 @@ export function partitionDepositsByHiddenShare<T extends { id: string }>(
 ): { visible: T[]; hidden: T[]; hiddenUsd: number; totalUsd: number } {
   const part = partitionDailyHiddenFee(rows, amountUsd, at, hiddenRate);
   const totalCents = rows.reduce((sum, row) => sum + toCents(amountUsd(row)), 0);
-  const hiddenCents = part.hidden.reduce((sum, row) => sum + toCents(amountUsd(row)), 0);
+  const hiddenCents = rows.reduce(
+    (sum, row) => sum + toCents(reportingSplit(amountUsd(row), at(row), hiddenRate).fee),
+    0,
+  );
   return {
     visible: part.visible,
     hidden: part.hidden,
@@ -494,8 +502,8 @@ export function partitionDepositsByHiddenShare<T extends { id: string }>(
 }
 
 /**
- * Charge the hidden 20% separately on every Nairobi day on or after {@link DAILY_HIDDEN_FEE_FROM}.
- * Assignment is prefix-stable: later payments never pull an earlier payment into the fee.
+ * Per-payment 20% on every Nairobi day on or after {@link DAILY_HIDDEN_FEE_FROM}.
+ * Visible is every payment. Hidden is every payment whose fee is greater than zero.
  */
 export function partitionDailyHiddenFee<T>(
   rows: T[],
@@ -507,8 +515,8 @@ export function partitionDailyHiddenFee<T>(
 }
 
 /**
- * Deposit rows the filtered viewer may see.
- * From {@link DAILY_HIDDEN_FEE_FROM} forward, each day's incoming payments have 20% charged and hidden.
+ * Deposit rows a viewer may list. Every completed payment stays in the list.
+ * Admin amounts are the per-payment net from {@link reportingSplit}; this does not drop rows.
  */
 export function depositsForViewer<T extends { id: string; userId?: string }>(
   rows: T[],
@@ -519,8 +527,11 @@ export function depositsForViewer<T extends { id: string; userId?: string }>(
   unlocked = false,
 ): T[] {
   void users;
-  if (!shouldHideAdminEarnings(viewerEmail, unlocked)) return rows;
-  return partitionDailyHiddenFee(rows, amountUsd, at).visible;
+  void amountUsd;
+  void at;
+  void viewerEmail;
+  void unlocked;
+  return rows;
 }
 
 /**
@@ -569,21 +580,21 @@ export function nairobiDayEarnings<T extends { id: string }>(
 ): NairobiDayEarnings<T> {
   const onDay = rows.filter((row) => nairobiDateKey(at(row)) === day);
   const chargesFee = dayChargesHiddenFee(day);
-  const part = chargesFee
-    ? partitionDailyHiddenFee(onDay, amountUsd, at)
-    : { visible: onDay, hidden: [] as T[] };
-  const sum = (list: T[]) => roundUsd(list.reduce((total, row) => total + amountUsd(row), 0));
+  const splits = onDay.map((row) => reportingSplit(amountUsd(row), at(row)));
+  const sumSplits = (pick: (split: { gross: number; fee: number; net: number }) => number) =>
+    roundUsd(splits.reduce((total, split) => total + pick(split), 0));
+  const hidden = onDay.filter((row) => reportingSplit(amountUsd(row), at(row)).fee > 0);
   return {
     day,
     chargesFee,
     rows: onDay,
-    hidden: part.hidden,
-    visible: part.visible,
-    fullUsd: sum(onDay),
-    hiddenUsd: sum(part.hidden),
-    visibleUsd: sum(part.visible),
+    hidden,
+    visible: onDay,
+    fullUsd: sumSplits((split) => split.gross),
+    hiddenUsd: sumSplits((split) => split.fee),
+    visibleUsd: sumSplits((split) => split.net),
     paymentCount: onDay.length,
-    hiddenCount: part.hidden.length,
+    hiddenCount: hidden.length,
   };
 }
 

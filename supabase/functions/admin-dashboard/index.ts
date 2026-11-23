@@ -1,7 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { User } from 'npm:@supabase/supabase-js@2'
 import { collectedTotals, mergeJoinedUsers, splitMpesaDeposits, type DashboardDeposit } from '../_shared/admin-dashboard.ts'
-import { partitionDailyHiddenFee } from '../_shared/admin-hidden-fee.ts'
+import { feeRecord, reportingSplit, withExplicitSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
 import { isAdmin } from '../_shared/admin-staff.ts'
 import { loadAdminDashboardSources } from '../_shared/direct-admin.ts'
 import { readPaymentSettings } from '../_shared/direct-money.ts'
@@ -14,17 +14,16 @@ function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
-/** Same unit for every row so the running 20% budget does not depend on FX display. */
-function feeAmount(row: DashboardDeposit): number {
-  if (row.amount_kes != null && Number.isFinite(row.amount_kes) && row.amount_kes > 0) return row.amount_kes
-  if (row.amount_usd != null && Number.isFinite(row.amount_usd) && row.amount_usd > 0) return row.amount_usd
-  return 0
-}
-
 function feeAt(row: DashboardDeposit): string {
   return row.credited_at ?? row.created_at
 }
 
+/**
+ * ADMIN_EARNED_TOTAL_KES is the recorded gross figure (the same number superadmin
+ * splits). Regular admins receive one 20% removal of that override. This is not
+ * applied on top of per-payment nets: when the override is absent, the admin
+ * total is the sum of per-payment nets instead.
+ */
 function visibleEarnedKes(totalKes: number): number {
   const total = Math.round((totalKes + Number.EPSILON) * 100)
   const hidden = Math.round(total * 0.2)
@@ -166,24 +165,35 @@ Deno.serve(async (req) => {
       ...row,
       user_email: emails.get(row.user_id) ?? null,
     })
-    const part = partitionDailyHiddenFee(collected, feeAmount, feeAt)
+    const netCollected = collected.map((row) => withNetAmounts(row))
+    const feeRows = collected.flatMap((row) => {
+      const fee = feeRecord(row)
+      return fee ? [fee] : []
+    })
     const fullKes = sumField(collected, (row) => row.amount_kes)
+    const netKes = sumField(netCollected, (row) => row.amount_kes)
+    const feeKes = collected.reduce((sum, row) => {
+      if (row.amount_kes == null) return sum
+      return sum + reportingSplit(row.amount_kes, feeAt(row)).fee
+    }, 0)
     const recordedKes = earnedTotalKes(settingsRaw, fullKes ?? totals.kes)
-    const adminEarned = settingsOverride(settingsRaw) ? visibleEarnedKes(recordedKes) : (sumField(part.visible, (row) => row.amount_kes) ?? visibleEarnedKes(recordedKes))
-    const visibleTotals = collectedTotals(part.visible)
-    console.log('admin-dashboard overview', user.id, userCounts.lifetime, part.visible.length)
+    // Override is gross, so regular admins get one 20% off that figure.
+    // Without an override, the admin total is the sum of per-payment nets.
+    const adminEarned = settingsOverride(settingsRaw) ? visibleEarnedKes(recordedKes) : (netKes ?? visibleEarnedKes(recordedKes))
+    const visibleTotals = collectedTotals(netCollected)
+    console.log('admin-dashboard overview', user.id, userCounts.lifetime, netCollected.length)
     if (body.scope === 'retained') {
       if (!isRetainedCaller(user)) return json({ error: 'Forbidden' }, 403)
       return json({
         users,
-        collected: collected.map(withEmail),
-        hidden: part.hidden.map(withEmail),
+        collected: collected.map((row) => withEmail(withExplicitSplit(row))),
+        hidden: feeRows.map(withEmail),
         other: other.map(withEmail),
         totals: {
           collected_usd: totals.usd,
           collected_kes: recordedKes,
           earned_total_kes: recordedKes,
-          hidden_kes: sumField(part.hidden, (row) => row.amount_kes) ?? 0,
+          hidden_kes: roundMoney(feeKes),
           collected_count: totals.count,
           user_count: userCounts.lifetime,
           users_today: userCounts.today,
@@ -195,13 +205,13 @@ Deno.serve(async (req) => {
     }
     return json({
       users,
-      collected: part.visible.map(withEmail),
+      collected: netCollected.map(withEmail),
       other: other.map(withEmail),
       totals: {
         collected_usd: visibleTotals.usd,
         collected_kes: adminEarned,
         earned_total_kes: adminEarned,
-        collected_count: part.visible.length,
+        collected_count: netCollected.length,
         user_count: userCounts.lifetime,
         users_today: userCounts.today,
         users_yesterday: userCounts.yesterday,

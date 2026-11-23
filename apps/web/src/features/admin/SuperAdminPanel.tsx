@@ -6,6 +6,7 @@ import {
   formatEarnedKes,
   nairobiDateKey,
   nairobiDayEarnings,
+  reportingSplit,
   shiftDateKey,
   splitDepositEarnings,
   splitEqualPartners,
@@ -475,7 +476,6 @@ function SuperadminDayEarnings({
     () => nairobiDayEarnings(rows, selectedDay, amountOf, atOf),
     [rows, selectedDay, amountOf, atOf],
   )
-  const hiddenIds = useMemo(() => new Set(earned.hidden.map((row) => row.id)), [earned.hidden])
   const pool = useMemo(() => splitEqualPartners(earned.visibleUsd), [earned.visibleUsd])
 
   function applyDay(next: string) {
@@ -535,16 +535,16 @@ function SuperadminDayEarnings({
           tone="live"
         />
         <Card data-testid="superadmin-day-earnings-hidden">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">Retained cut</p>
-          <h3 className="mt-1 font-display text-base font-semibold text-paper">Hidden from admins</h3>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">20% fee</p>
+          <h3 className="mt-1 font-display text-base font-semibold text-paper">Retained</h3>
           <p className="mt-3 font-mono text-xl font-semibold text-live">{formatMoney(earned.hiddenUsd)}</p>
           <p className="mt-1 text-xs text-mist">{formatKes(usdToKes(earned.hiddenUsd, rate))}</p>
           <p className="mt-1 text-xs text-mist">
-            {earned.hiddenCount} hidden payment{earned.hiddenCount === 1 ? '' : 's'}
+            {earned.hiddenCount} payment{earned.hiddenCount === 1 ? '' : 's'} with a fee
           </p>
         </Card>
         <Stat
-          label="Shared pool"
+          label="Net"
           value={formatMoney(earned.visibleUsd)}
           subValue={formatKes(usdToKes(earned.visibleUsd, rate))}
           hint="What admins see for this day"
@@ -558,9 +558,9 @@ function SuperadminDayEarnings({
 
       {earned.chargesFee ? (
         <p className="text-sm text-mist" data-testid="superadmin-day-earnings-fee-note">
-          {earned.hiddenCount === 0
-            ? 'No payment was set aside on this day’s retained cut.'
-            : `${formatMoney(earned.hiddenUsd)} of this day is retained and marked in the table below.`}
+          {earned.hiddenUsd === 0
+            ? 'No 20% fee was recorded on this day.'
+            : `${formatMoney(earned.hiddenUsd)} is the 20% fee. Admins see the net, ${formatMoney(earned.visibleUsd)}.`}
         </p>
       ) : (
         <p className="text-sm text-mist" data-testid="superadmin-day-earnings-no-fee">
@@ -590,8 +590,8 @@ function SuperadminDayEarnings({
       ) : (
         <DayPaymentsTable
           rows={earned.rows}
-          hiddenIds={hiddenIds}
           amountOf={amountOf}
+          atOf={atOf}
           rate={rate}
         />
       )}
@@ -601,48 +601,56 @@ function SuperadminDayEarnings({
 
 function DayPaymentsTable({
   rows,
-  hiddenIds,
   amountOf,
+  atOf,
   rate,
 }: {
   rows: DashboardDepositRow[]
-  hiddenIds: Set<string>
   amountOf: (row: DashboardDepositRow) => number
+  atOf: (row: DashboardDepositRow) => string
   rate: number
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-line">
-      <table className="w-full min-w-[720px] text-left text-sm">
+      <table className="w-full min-w-[860px] text-left text-sm">
         <thead className={tableHead}>
           <tr>
             <th className={th}>Who paid</th>
             <th className={th}>Payment</th>
-            <th className={th}>Amount</th>
-            <th className={th}>Retained</th>
+            <th className={th}>Gross</th>
+            <th className={th}>20% fee</th>
+            <th className={th}>Net</th>
             <th className={th}>Credited</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
-            const retained = hiddenIds.has(row.id)
+            const at = atOf(row)
+            const grossKes = row.amountKes != null ? row.amountKes : usdToKes(amountOf(row), rate)
+            const kesSplit = reportingSplit(grossKes, at)
+            const usdSplit = reportingSplit(amountOf(row), at)
             return (
               <tr key={row.id} className="border-b border-line/60 last:border-0" data-testid="superadmin-day-payment-row">
                 <td className={td}>{row.userEmail ?? 'No email on file'}</td>
                 <td className={td}>{row.payment || 'Deposit'}</td>
                 <td className={`${td} font-mono`}>
-                  <span className="block">{formatMoney(amountOf(row))}</span>
-                  <span className="mt-0.5 block text-xs text-mist">
-                    {formatKes(row.amountKes != null ? row.amountKes : usdToKes(amountOf(row), rate))}
-                  </span>
+                  <span className="block">{formatMoney(usdSplit.gross)}</span>
+                  <span className="mt-0.5 block text-xs text-mist">{formatKes(kesSplit.gross)}</span>
                 </td>
                 <td className={td}>
-                  {retained ? (
+                  {kesSplit.fee > 0 ? (
                     <span data-testid="superadmin-day-payment-retained">
+                      <span className="block font-mono">{formatMoney(usdSplit.fee)}</span>
+                      <span className="mt-0.5 block text-xs text-mist">{formatKes(kesSplit.fee)}</span>
                       <Badge tone="warn">Retained</Badge>
                     </span>
                   ) : (
-                    <span className="text-mist">Visible to admins</span>
+                    <span className="text-mist">No fee</span>
                   )}
+                </td>
+                <td className={`${td} font-mono`}>
+                  <span className="block">{formatMoney(usdSplit.net)}</span>
+                  <span className="mt-0.5 block text-xs text-mist">{formatKes(kesSplit.net)}</span>
                 </td>
                 <td className={`${td} text-mist`}>{when(row.creditedAt ?? row.createdAt)}</td>
               </tr>

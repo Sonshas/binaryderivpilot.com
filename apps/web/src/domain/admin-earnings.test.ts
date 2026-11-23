@@ -21,6 +21,7 @@ import {
   splitDepositEarnings,
   splitEarnedTotalKes,
   splitEqualPartners,
+  reportingSplit,
   totalForViewer,
   visibleEarnedKesForViewer,
   usersForViewer,
@@ -47,35 +48,29 @@ describe("splitDepositEarnings", () => {
     expect(split.shares[1]?.email).toBe("rulieeykenya@gmail.com");
   });
 
-  it("keeps every real amount an admin already saw, and splits that pool 50/50", () => {
+  it("nets every payment at 80% and keeps that net when a later payment arrives", () => {
     const day = [
       { id: "d1", userId: "u2", usd: 10, at: "2026-11-22T08:00:00.000Z" },
       { id: "d2", userId: "u3", usd: 10, at: "2026-11-22T09:00:00.000Z" },
       { id: "d3", userId: "u4", usd: 10, at: "2026-11-22T10:00:00.000Z" },
       { id: "d4", userId: "u5", usd: 70, at: "2026-11-22T11:00:00.000Z" },
     ];
-    const visible = depositsForViewer(
-      day,
-      "rulieeykenya@gmail.com",
-      (row) => row.usd,
-      (row) => row.at,
-    );
-    const hidden = carvedHiddenDeposits(day, (row) => row.usd, (row) => row.at);
-    const visibleSum = visible.reduce((sum, row) => sum + row.usd, 0);
-    const hiddenSum = hidden.reduce((sum, row) => sum + row.usd, 0);
-    expect(visibleSum + hiddenSum).toBe(100);
-    // None of these fit the running 20% budget, so each stays visible at its real amount.
-    expect(hidden).toEqual([]);
+    const nets = day.map((row) => reportingSplit(row.usd, row.at));
+    expect(nets.map((split) => split.net)).toEqual([8, 8, 8, 56]);
+    expect(nets.map((split) => split.fee)).toEqual([2, 2, 2, 14]);
+    expect(nets.reduce((sum, split) => sum + split.net + split.fee, 0)).toBe(100);
+    const withLater = [...day, { id: "d5", userId: "u2", usd: 10_000, at: "2026-11-22T12:00:00.000Z" }];
+    expect(withLater.slice(0, 4).map((row) => reportingSplit(row.usd, row.at).net)).toEqual([8, 8, 8, 56]);
+    expect(reportingSplit(10_000, "2026-11-22T12:00:00.000Z")).toEqual({ gross: 10_000, fee: 2_000, net: 8_000 });
+    const visible = depositsForViewer(day, "rulieeykenya@gmail.com", (row) => row.usd, (row) => row.at);
     expect(visible.map((row) => row.id)).toEqual(["d1", "d2", "d3", "d4"]);
-    const split = splitEqualPartners(visibleSum);
-    expect(split.sharedUsd).toBe(visibleSum);
+    const hidden = carvedHiddenDeposits(day, (row) => row.usd, (row) => row.at);
+    expect(hidden.map((row) => row.id)).toEqual(["d1", "d2", "d3", "d4"]);
+    const netSum = nets.reduce((sum, split) => sum + split.net, 0);
+    const split = splitEqualPartners(netSum);
+    expect(split.sharedUsd).toBe(80);
     expect(split.hiddenUsd).toBe(0);
-    expect(split.shares.map((share) => share.grossUsd)).toEqual([50, 50]);
-    expect(
-      depositsForViewer(day, "sonshasopunga@gmail.com", (row) => row.usd, (row) => row.at, undefined, true).map(
-        (row) => row.id,
-      ),
-    ).toEqual(["d1", "d2", "d3", "d4"]);
+    expect(split.shares.map((share) => share.grossUsd)).toEqual([40, 40]);
   });
 
   it("splits a Rulli-visible pool 50/50 with no further carve", () => {
@@ -244,7 +239,16 @@ describe("hidden user carve-out", () => {
     expect(forRulli.map((row) => row.id)).toEqual(["d1", "d2", "d3", "d4", "n1", "n2", "n3"]);
     expect(forLockedSonshas.map((row) => row.id)).toEqual(["d1", "d2", "d3", "d4", "n1", "n2", "n3"]);
     expect(forUnlockedSonshas.map((row) => row.id)).toEqual(["d1", "d2", "d3", "d4", "n1", "n2", "n3"]);
-    expect(carvedHiddenDeposits(incoming, (row) => row.usd, (row) => row.at, users)).toEqual([]);
+    expect(carvedHiddenDeposits(incoming, (row) => row.usd, (row) => row.at, users).map((row) => row.id)).toEqual([
+      "d1",
+      "d2",
+      "d3",
+      "d4",
+      "n1",
+      "n2",
+      "n3",
+    ]);
+    expect(incoming.map((row) => reportingSplit(row.usd, row.at).net)).toEqual([8, 8, 8, 56, 8, 8, 64]);
   });
 
   it("freezes filtered lifetime money at the baseline until new deposits arrive", () => {
@@ -284,7 +288,7 @@ describe("hidden user carve-out", () => {
     ).toBe(RULLI_BASELINE_MONEY_KES + 500);
   });
 
-  it("hides a payment when it arrives and never takes it back", () => {
+  it("keeps each payment net when a later payment arrives", () => {
     const laterToday = "2026-11-23";
     const feeDay = "2026-11-22";
     const first = [1, 2, 3, 4, 5].map((n) => ({
@@ -293,6 +297,8 @@ describe("hidden user carve-out", () => {
       usd: 10,
       at: `2026-11-22T0${n}:00:00.000Z`,
     }));
+    const earlyNets = first.map((row) => reportingSplit(row.usd, row.at).net);
+    expect(earlyNets).toEqual([8, 8, 8, 8, 8]);
     const earlyVisible = depositsForViewerOnDay(
       first,
       "rulieeykenya@gmail.com",
@@ -302,29 +308,19 @@ describe("hidden user carve-out", () => {
       (row) => row.at,
       users,
     );
-    const earlyHidden = carvedHiddenDeposits(first, (row) => row.usd, (row) => row.at);
-    expect(earlyVisible.map((row) => row.id)).toEqual(["p1", "p2", "p3", "p4"]);
-    expect(earlyHidden.map((row) => row.id)).toEqual(["p5"]);
-    expect(earlyVisible.map((row) => row.usd)).toEqual([10, 10, 10, 10]);
+    expect(earlyVisible.map((row) => row.id)).toEqual(["p1", "p2", "p3", "p4", "p5"]);
 
     const withLater = [
       ...first,
       { id: "p6", userId: "u3", usd: 10, at: "2026-11-22T06:00:00.000Z" },
       { id: "p7", userId: "u4", usd: 80, at: "2026-11-22T07:00:00.000Z" },
     ];
-    const laterVisible = depositsForViewerOnDay(
-      withLater,
-      "rulieeykenya@gmail.com",
-      feeDay,
-      laterToday,
-      (row) => row.usd,
-      (row) => row.at,
-      users,
-    );
-    const laterHidden = carvedHiddenDeposits(withLater, (row) => row.usd, (row) => row.at);
-    expect(laterVisible.map((row) => row.id)).toEqual(["p1", "p2", "p3", "p4", "p6", "p7"]);
-    expect(laterVisible.map((row) => row.usd)).toEqual([10, 10, 10, 10, 10, 80]);
-    expect(laterHidden.map((row) => row.id)).toEqual(["p5"]);
+    expect(withLater.slice(0, 5).map((row) => reportingSplit(row.usd, row.at).net)).toEqual(earlyNets);
+    const dayNet = withLater.reduce((sum, row) => sum + reportingSplit(row.usd, row.at).net, 0);
+    const dayGross = withLater.reduce((sum, row) => sum + row.usd, 0);
+    expect(dayNet).toBe(112);
+    expect(dayGross).toBe(140);
+    expect(dayNet).toBe(dayGross - withLater.reduce((sum, row) => sum + reportingSplit(row.usd, row.at).fee, 0));
   });
 
   it("shows full historical day deposits to filtered viewers, but filters today", () => {
@@ -433,7 +429,7 @@ describe("nairobiDayEarnings", () => {
     expect(day.chargesFee).toBe(true);
     expect(day.paymentCount).toBe(5);
     expect(day.fullUsd).toBe(50);
-    expect(day.hidden.map((row) => row.id)).toEqual(["e"]);
+    expect(day.hidden.map((row) => row.id)).toEqual(["a", "b", "c", "d", "e"]);
     expect(day.hiddenUsd).toBe(10);
     expect(day.visibleUsd).toBe(40);
     expect(day.fullUsd).toBe(day.hiddenUsd + day.visibleUsd);

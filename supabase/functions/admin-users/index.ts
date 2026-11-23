@@ -1,10 +1,10 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { SupabaseClient, User } from 'npm:@supabase/supabase-js@2'
 import { readAllPages, readByIds } from '../_shared/admin-batch.ts'
-import { isCreditedDeposit, splitMpesaDeposits, toDashboardDeposit, type DashboardDeposit, type DepositSource } from '../_shared/admin-dashboard.ts'
+import { isCreditedDeposit, splitMpesaDeposits, toDashboardDeposit, type DepositSource } from '../_shared/admin-dashboard.ts'
 import { appRole, isAdmin, writeAudit } from '../_shared/admin-staff.ts'
 import { loadAdminDashboardSources, loadAdminDepositsList, loadAdminUserListRows } from '../_shared/direct-admin.ts'
-import { partitionDailyHiddenFee } from '../_shared/admin-hidden-fee.ts'
+import { reportingSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
 import { adminClient, corsHeaders, json, logEdgeError, userFromRequest } from '../_shared/server.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -20,22 +20,42 @@ function money(value: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
-function feeAmount(row: DashboardDeposit): number {
-  if (row.amount_kes != null && Number.isFinite(row.amount_kes) && row.amount_kes > 0) return row.amount_kes
-  if (row.amount_usd != null && Number.isFinite(row.amount_usd) && row.amount_usd > 0) return row.amount_usd
-  return 0
-}
-
-/** Payments that belong on the superadmin fee list only. Empty when the deposit read fails. */
-async function hiddenDeposits(): Promise<DashboardDeposit[]> {
+/** Per-user reporting fee to subtract from gross collected totals. Empty when the deposit read fails. */
+async function feeCutsByUser(): Promise<Map<string, { usd: number; kes: number }>> {
+  const map = new Map<string, { usd: number; kes: number }>()
   try {
     const sources = await loadAdminDashboardSources()
     const { collected } = splitMpesaDeposits(sources.deposits)
-    return partitionDailyHiddenFee(collected, feeAmount, (row) => row.credited_at ?? row.created_at).hidden
+    for (const row of collected) {
+      const at = row.credited_at ?? row.created_at
+      const cur = map.get(row.user_id) ?? { usd: 0, kes: 0 }
+      if (row.amount_kes != null) cur.kes += reportingSplit(row.amount_kes, at).fee
+      if (row.amount_usd != null) cur.usd += reportingSplit(row.amount_usd, at).fee
+      map.set(row.user_id, cur)
+    }
   } catch (err) {
     console.error('admin-users.hidden-fee', err instanceof Error ? err.message : 'error')
-    return []
   }
+  return map
+}
+
+function scrubCompletedDeposit(row: Row): Row {
+  if (String(row.status ?? '') !== 'COMPLETED') return row
+  const details = asRecord(row.details) ?? {}
+  const at = (typeof details.completed_at === 'string' && details.completed_at) || String(row.updated_at ?? row.created_at ?? '')
+  const currency = String(row.currency ?? '').toUpperCase()
+  const amount = Number(row.amount)
+  const callback = Number(row.callback_amount_kes)
+  const detailKes = Number(details.amount_kes)
+  const detailUsd = Number(details.amount_usd)
+  const nextDetails = { ...details }
+  const next: Row = { ...row, details: nextDetails }
+  if (Number.isFinite(callback) && callback > 0) next.callback_amount_kes = reportingSplit(callback, at).net
+  if (Number.isFinite(detailKes) && detailKes > 0) nextDetails.amount_kes = reportingSplit(detailKes, at).net
+  if (Number.isFinite(detailUsd) && detailUsd > 0) nextDetails.amount_usd = reportingSplit(detailUsd, at).net
+  if (Number.isFinite(amount) && amount > 0 && currency === 'KES') next.amount = reportingSplit(amount, at).net
+  if (Number.isFinite(amount) && amount > 0 && currency === 'USD') next.amount = reportingSplit(amount, at).net
+  return next
 }
 
 async function loadUserRows(admin: SupabaseClient): Promise<Row[]> {
@@ -128,8 +148,8 @@ async function depositStats(admin: SupabaseClient, userIds: string[]) {
       is_simulated: row.is_simulated === true,
       account_mode: (row.account_mode as string | null) ?? null,
     }
-    if (isCreditedDeposit(source)) {
-      const view = toDashboardDeposit(source)
+      if (isCreditedDeposit(source)) {
+      const view = withNetAmounts(toDashboardDeposit(source))
       const cur = collected.get(uid) ?? { usd: 0, kes: 0, count: 0 }
       cur.usd += view.amount_usd ?? 0
       cur.kes += view.amount_kes ?? 0
@@ -259,23 +279,12 @@ Deno.serve(async (req) => {
     if (action === 'list') {
       try {
         const rows = await loadAdminUserListRows()
-        const hidden = await hiddenDeposits()
-        if (hidden.length > 0) {
-          const byUser = new Map<string, { usd: number; kes: number; count: number }>()
-          for (const row of hidden) {
-            const cur = byUser.get(row.user_id) ?? { usd: 0, kes: 0, count: 0 }
-            cur.usd += row.amount_usd ?? 0
-            cur.kes += row.amount_kes ?? 0
-            cur.count += 1
-            byUser.set(row.user_id, cur)
-          }
-          for (const user of rows) {
-            const cut = byUser.get(user.id)
-            if (!cut) continue
-            user.collected_usd = Math.round((user.collected_usd - cut.usd) * 100) / 100
-            user.collected_kes = Math.round((user.collected_kes - cut.kes) * 100) / 100
-            user.collected_count = Math.max(0, user.collected_count - cut.count)
-          }
+        const cuts = await feeCutsByUser()
+        for (const user of rows) {
+          const cut = cuts.get(user.id)
+          if (!cut) continue
+          user.collected_usd = Math.round((user.collected_usd - cut.usd) * 100) / 100
+          user.collected_kes = Math.round((user.collected_kes - cut.kes) * 100) / 100
         }
         console.log('admin-users list', actor.id, rows.length)
         return json({ users: rows })
@@ -414,7 +423,6 @@ Deno.serve(async (req) => {
           .limit(50),
       ])
 
-      const hiddenIds = new Set((await hiddenDeposits()).map((row) => row.id))
       return json({
         user: {
           ...user,
@@ -427,7 +435,7 @@ Deno.serve(async (req) => {
           balance_usd: money(walletRes.data?.balance),
           wallet_id: walletRes.data?.id ?? null,
         },
-        deposits: (depositsRes.data ?? []).filter((row) => !hiddenIds.has(String((row as { id?: unknown }).id ?? ''))),
+        deposits: (depositsRes.data ?? []).map((row) => scrubCompletedDeposit(row as Row)),
         withdrawals: withdrawalsRes.data ?? [],
         transactions: txRes.data ?? [],
         trades: tradesRes.data ?? [],
@@ -668,10 +676,9 @@ Deno.serve(async (req) => {
           is_simulated: false,
           account_mode: 'real',
         }
-        return toDashboardDeposit(source)
+        return withNetAmounts(toDashboardDeposit(source))
       })
-      const hiddenIds = new Set((await hiddenDeposits()).map((row) => row.id))
-      return json({ rows: rows.filter((row) => !hiddenIds.has(row.id)) })
+      return json({ rows })
     }
 
     if (action === 'stk_queue') {
@@ -725,10 +732,8 @@ Deno.serve(async (req) => {
 
     if (action === 'deposits_list') {
       const deposits = await loadAdminDepositsList(300)
-      const hiddenIds = new Set((await hiddenDeposits()).map((row) => row.id))
       const rows = deposits.flatMap((source) => {
-        const mapped = toDashboardDeposit(source)
-        if (hiddenIds.has(mapped.id)) return []
+        const mapped = withNetAmounts(toDashboardDeposit(source))
         return [{ ...mapped, user_email: source.user_email }]
       })
       return json({ rows })
