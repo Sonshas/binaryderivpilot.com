@@ -1,7 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { User } from 'npm:@supabase/supabase-js@2'
 import { collectedTotals, mergeJoinedUsers, splitMpesaDeposits, type DashboardDeposit } from '../_shared/admin-dashboard.ts'
-import { feeRecord, reportingSplit, withExplicitSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
+import { feeRecord, kesReportingSplit, withExplicitSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
 import { isAdmin } from '../_shared/admin-staff.ts'
 import { loadAdminDashboardSources } from '../_shared/direct-admin.ts'
 import { readPaymentSettings } from '../_shared/direct-money.ts'
@@ -12,10 +12,6 @@ const SONSHAS_EMAIL = 'sonshasopunga@gmail.com'
 
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100
-}
-
-function feeAt(row: DashboardDeposit): string {
-  return row.credited_at ?? row.created_at
 }
 
 /**
@@ -172,10 +168,7 @@ Deno.serve(async (req) => {
     })
     const fullKes = sumField(collected, (row) => row.amount_kes)
     const netKes = sumField(netCollected, (row) => row.amount_kes)
-    const feeKes = collected.reduce((sum, row) => {
-      if (row.amount_kes == null) return sum
-      return sum + reportingSplit(row.amount_kes, feeAt(row)).fee
-    }, 0)
+    const feeKes = collected.reduce((sum, row) => sum + (kesReportingSplit(row)?.fee ?? 0), 0)
     const recordedKes = earnedTotalKes(settingsRaw, fullKes ?? totals.kes)
     // Override is gross, so regular admins get one 20% off that figure.
     // Without an override, the admin total is the sum of per-payment nets.

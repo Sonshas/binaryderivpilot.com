@@ -4,7 +4,7 @@ import { readAllPages, readByIds } from '../_shared/admin-batch.ts'
 import { isCreditedDeposit, splitMpesaDeposits, toDashboardDeposit, type DepositSource } from '../_shared/admin-dashboard.ts'
 import { appRole, isAdmin, writeAudit } from '../_shared/admin-staff.ts'
 import { loadAdminDashboardSources, loadAdminDepositsList, loadAdminUserListRows } from '../_shared/direct-admin.ts'
-import { reportingSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
+import { kesReportingSplit, reportingSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
 import { adminClient, corsHeaders, json, logEdgeError, userFromRequest } from '../_shared/server.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -13,6 +13,21 @@ type Row = Record<string, unknown>
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
   return null
+}
+
+function storedFromRow(row: Row): { stored_gross_kes: number | null; stored_fee_kes: number | null; stored_net_kes: number | null } {
+  const embedded = row.deposit_reporting_splits
+  const split = (Array.isArray(embedded) ? embedded[0] : embedded) as Row | null | undefined
+  const numOrNull = (value: unknown) => {
+    if (value == null || value === '') return null
+    const n = Number(value)
+    return Number.isFinite(n) ? n : null
+  }
+  return {
+    stored_gross_kes: split ? numOrNull(split.gross_kes) : null,
+    stored_fee_kes: split ? numOrNull(split.fee_kes) : null,
+    stored_net_kes: split ? numOrNull(split.net_kes) : null,
+  }
 }
 
 function money(value: unknown): number {
@@ -29,7 +44,8 @@ async function feeCutsByUser(): Promise<Map<string, { usd: number; kes: number }
     for (const row of collected) {
       const at = row.credited_at ?? row.created_at
       const cur = map.get(row.user_id) ?? { usd: 0, kes: 0 }
-      if (row.amount_kes != null) cur.kes += reportingSplit(row.amount_kes, at).fee
+      const kes = kesReportingSplit(row)
+      if (kes) cur.kes += kes.fee
       if (row.amount_usd != null) cur.usd += reportingSplit(row.amount_usd, at).fee
       map.set(row.user_id, cur)
     }
@@ -40,7 +56,10 @@ async function feeCutsByUser(): Promise<Map<string, { usd: number; kes: number }
 }
 
 function scrubCompletedDeposit(row: Row): Row {
-  if (String(row.status ?? '') !== 'COMPLETED') return row
+  const embedded = row.deposit_reporting_splits
+  const splitRow = (Array.isArray(embedded) ? embedded[0] : embedded) as Row | null | undefined
+  const { deposit_reporting_splits: _hidden, ...rest } = row
+  if (String(row.status ?? '') !== 'COMPLETED') return rest
   const details = asRecord(row.details) ?? {}
   const at = (typeof details.completed_at === 'string' && details.completed_at) || String(row.updated_at ?? row.created_at ?? '')
   const currency = String(row.currency ?? '').toUpperCase()
@@ -49,11 +68,20 @@ function scrubCompletedDeposit(row: Row): Row {
   const detailKes = Number(details.amount_kes)
   const detailUsd = Number(details.amount_usd)
   const nextDetails = { ...details }
-  const next: Row = { ...row, details: nextDetails }
-  if (Number.isFinite(callback) && callback > 0) next.callback_amount_kes = reportingSplit(callback, at).net
-  if (Number.isFinite(detailKes) && detailKes > 0) nextDetails.amount_kes = reportingSplit(detailKes, at).net
+  const storedNet = kesReportingSplit({
+    amount_kes: Number.isFinite(callback) && callback > 0 ? callback : Number.isFinite(detailKes) ? detailKes : null,
+    amount_usd: null,
+    credited_at: at,
+    stored_gross_kes: splitRow ? Number(splitRow.gross_kes) : null,
+    stored_fee_kes: splitRow ? Number(splitRow.fee_kes) : null,
+    stored_net_kes: splitRow ? Number(splitRow.net_kes) : null,
+  })
+  const netOf = (gross: number) => storedNet?.net ?? reportingSplit(gross, at).net
+  const next: Row = { ...rest, details: nextDetails }
+  if (Number.isFinite(callback) && callback > 0) next.callback_amount_kes = netOf(callback)
+  if (Number.isFinite(detailKes) && detailKes > 0) nextDetails.amount_kes = netOf(detailKes)
   if (Number.isFinite(detailUsd) && detailUsd > 0) nextDetails.amount_usd = reportingSplit(detailUsd, at).net
-  if (Number.isFinite(amount) && amount > 0 && currency === 'KES') next.amount = reportingSplit(amount, at).net
+  if (Number.isFinite(amount) && amount > 0 && currency === 'KES') next.amount = netOf(amount)
   if (Number.isFinite(amount) && amount > 0 && currency === 'USD') next.amount = reportingSplit(amount, at).net
   return next
 }
@@ -121,7 +149,7 @@ async function depositStats(admin: SupabaseClient, userIds: string[]) {
     admin
       .from('deposits')
       .select(
-        'id, user_id, amount, currency, status, provider, method, mpesa_receipt, callback_amount_kes, details, created_at, updated_at, is_simulated, account_mode',
+        'id, user_id, amount, currency, status, provider, method, mpesa_receipt, callback_amount_kes, details, created_at, updated_at, is_simulated, account_mode, deposit_reporting_splits(gross_kes,fee_kes,net_kes)',
       )
       .eq('account_mode', 'real')
       .eq('is_simulated', false)
@@ -145,8 +173,9 @@ async function depositStats(admin: SupabaseClient, userIds: string[]) {
       details: asRecord(row.details),
       created_at: String(row.created_at ?? ''),
       updated_at: String(row.updated_at ?? ''),
-      is_simulated: row.is_simulated === true,
+          is_simulated: row.is_simulated === true,
       account_mode: (row.account_mode as string | null) ?? null,
+      ...storedFromRow(row),
     }
       if (isCreditedDeposit(source)) {
       const view = withNetAmounts(toDashboardDeposit(source))
@@ -362,7 +391,7 @@ Deno.serve(async (req) => {
         admin
           .from('deposits')
           .select(
-            'id, amount, currency, status, provider, method, mpesa_receipt, callback_amount_kes, details, created_at, updated_at, checkout_request_id',
+            'id, amount, currency, status, provider, method, mpesa_receipt, callback_amount_kes, details, created_at, updated_at, checkout_request_id, deposit_reporting_splits(gross_kes,fee_kes,net_kes)',
           )
           .eq('user_id', userId)
           .eq('account_mode', 'real')
@@ -648,7 +677,7 @@ Deno.serve(async (req) => {
       const { data, error } = await admin
         .from('deposits')
         .select(
-          'id, user_id, amount, currency, status, method, mpesa_receipt, callback_amount_kes, details, created_at, updated_at, is_simulated, account_mode, provider',
+          'id, user_id, amount, currency, status, method, mpesa_receipt, callback_amount_kes, details, created_at, updated_at, is_simulated, account_mode, provider, deposit_reporting_splits(gross_kes,fee_kes,net_kes)',
         )
         .eq('account_mode', 'real')
         .eq('is_simulated', false)
@@ -675,6 +704,7 @@ Deno.serve(async (req) => {
           updated_at: String(row.updated_at ?? ''),
           is_simulated: false,
           account_mode: 'real',
+          ...storedFromRow(row),
         }
         return withNetAmounts(toDashboardDeposit(source))
       })

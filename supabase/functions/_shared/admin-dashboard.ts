@@ -28,6 +28,9 @@ export interface DepositSource {
   updated_at: string
   is_simulated: boolean
   account_mode: string | null
+  stored_gross_kes?: number | null
+  stored_fee_kes?: number | null
+  stored_net_kes?: number | null
 }
 
 export interface DashboardDeposit {
@@ -41,6 +44,9 @@ export interface DashboardDeposit {
   receipt: string | null
   created_at: string
   credited_at: string | null
+  stored_gross_kes?: number | null
+  stored_fee_kes?: number | null
+  stored_net_kes?: number | null
 }
 
 export interface CollectedTotals {
@@ -120,6 +126,9 @@ export function toDashboardDeposit(row: DepositSource): DashboardDeposit {
     receipt: text(row.mpesa_receipt) ?? text(details.mpesa_receipt),
     created_at: row.created_at,
     credited_at: credited,
+    stored_gross_kes: finiteNumber(row.stored_gross_kes),
+    stored_fee_kes: finiteNumber(row.stored_fee_kes),
+    stored_net_kes: finiteNumber(row.stored_net_kes),
   }
 }
 

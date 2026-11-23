@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import webFee from "./admin-hidden-fee.ts?raw";
 import edgeFee from "../../../../supabase/functions/_shared/admin-hidden-fee.ts?raw";
+import { withNetAmounts } from "@/domain/admin-hidden-fee";
 import {
   canSeeHiddenShare,
   carvedHiddenDeposits,
@@ -62,6 +63,25 @@ describe("splitDepositEarnings", () => {
     const withLater = [...day, { id: "d5", userId: "u2", usd: 10_000, at: "2026-11-22T12:00:00.000Z" }];
     expect(withLater.slice(0, 4).map((row) => reportingSplit(row.usd, row.at).net)).toEqual([8, 8, 8, 56]);
     expect(reportingSplit(10_000, "2026-11-22T12:00:00.000Z")).toEqual({ gross: 10_000, fee: 2_000, net: 8_000 });
+    expect(reportingSplit(6_500, "2026-11-23T20:54:00.000Z")).toEqual({ gross: 6_500, fee: 1_300, net: 5_200 });
+    const nov23 = reportingSplit(67_900, "2026-11-23T12:00:00.000Z");
+    expect(nov23).toEqual({ gross: 67_900, fee: 13_580, net: 54_320 });
+    expect(reportingSplit(nov23.net, "2026-11-23T12:00:00.000Z").net).not.toBe(nov23.net);
+    expect(nov23.net).toBe(54_320);
+    expect(reportingSplit(6_500, "2026-11-21T20:54:00.000Z")).toEqual({ gross: 6_500, fee: 0, net: 6_500 });
+    const shown = withNetAmounts({
+      amount_kes: 6_500,
+      amount_usd: null,
+      credited_at: "2026-11-23T20:54:00.000Z",
+      stored_gross_kes: 6_500,
+      stored_fee_kes: 1_300,
+      stored_net_kes: 5_200,
+    });
+    expect(shown.amount_kes).toBe(5_200);
+    expect(shown).not.toHaveProperty("stored_gross_kes");
+    expect(shown).not.toHaveProperty("stored_fee_kes");
+    expect(shown).not.toHaveProperty("stored_net_kes");
+    expect(shown).not.toHaveProperty("fee_kes");
     const visible = depositsForViewer(day, "rulieeykenya@gmail.com", (row) => row.usd, (row) => row.at);
     expect(visible.map((row) => row.id)).toEqual(["d1", "d2", "d3", "d4"]);
     const hidden = carvedHiddenDeposits(day, (row) => row.usd, (row) => row.at);

@@ -60,19 +60,56 @@ export interface SplitMoneyRow {
   amount_usd: number | null;
   credited_at?: string | null;
   created_at?: string | null;
+  /** Recorded once. Omitted from regular admin responses. */
+  stored_gross_kes?: number | null;
+  stored_fee_kes?: number | null;
+  stored_net_kes?: number | null;
+}
+
+function finiteMoney(value: unknown): number | null {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Stored KES split when the three parts still add up. Otherwise null so the caller uses the formula. */
+export function lockedKesSplit(row: SplitMoneyRow): ReportingSplit | null {
+  const gross = finiteMoney(row.stored_gross_kes);
+  const fee = finiteMoney(row.stored_fee_kes);
+  const net = finiteMoney(row.stored_net_kes);
+  if (gross == null || fee == null || net == null) return null;
+  const grossCents = Math.round(gross * 100);
+  const feeCents = Math.round(fee * 100);
+  const netCents = Math.round(net * 100);
+  if (feeCents < 0 || netCents < 0 || grossCents !== feeCents + netCents) return null;
+  return { gross: grossCents / 100, fee: feeCents / 100, net: netCents / 100 };
+}
+
+export function kesReportingSplit(row: SplitMoneyRow): ReportingSplit | null {
+  return lockedKesSplit(row) ?? (row.amount_kes == null ? null : reportingSplit(row.amount_kes, splitRowAt(row)));
+}
+
+function withoutStored<T extends SplitMoneyRow>(row: T): T {
+  const copy = { ...row };
+  delete copy.stored_gross_kes;
+  delete copy.stored_fee_kes;
+  delete copy.stored_net_kes;
+  return copy;
 }
 
 export function splitRowAt(row: SplitMoneyRow): string {
   return row.credited_at ?? row.created_at ?? "";
 }
 
-/** Admin payload: amount fields are the net. Gross and fee are not copied onto the row. */
+/** Admin payload: amount fields are the net. Gross, fee, and the stored split are not copied onto the row. */
 export function withNetAmounts<T extends SplitMoneyRow>(row: T): T {
   const at = splitRowAt(row);
+  const kes = kesReportingSplit(row);
+  const usd = row.amount_usd == null ? null : reportingSplit(row.amount_usd, at);
   return {
-    ...row,
-    amount_kes: row.amount_kes == null ? null : reportingSplit(row.amount_kes, at).net,
-    amount_usd: row.amount_usd == null ? null : reportingSplit(row.amount_usd, at).net,
+    ...withoutStored(row),
+    amount_kes: kes == null ? null : kes.net,
+    amount_usd: usd == null ? null : usd.net,
   };
 }
 
@@ -85,13 +122,13 @@ export interface AnnotatedSplitRow extends SplitMoneyRow {
   net_usd: number | null;
 }
 
-/** Superadmin payload: gross stays in amount_*, and fee/net are explicit. */
+/** Superadmin payload: gross stays in amount_*, and fee/net are explicit. Stored columns are not repeated. */
 export function withExplicitSplit<T extends SplitMoneyRow>(row: T): T & AnnotatedSplitRow {
   const at = splitRowAt(row);
-  const kes = row.amount_kes == null ? null : reportingSplit(row.amount_kes, at);
+  const kes = kesReportingSplit(row);
   const usd = row.amount_usd == null ? null : reportingSplit(row.amount_usd, at);
   return {
-    ...row,
+    ...withoutStored(row),
     gross_kes: kes?.gross ?? null,
     fee_kes: kes?.fee ?? null,
     net_kes: kes?.net ?? null,

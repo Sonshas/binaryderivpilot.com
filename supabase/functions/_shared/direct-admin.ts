@@ -1,9 +1,9 @@
 import type { AuthUserSource, DepositSource, PublicUserSource } from "./admin-dashboard.ts";
-import { serviceRestGet, withFreshDb } from "./direct-db.ts";
+import { serviceRestExactCount, serviceRestGet, withFreshDb } from "./direct-db.ts";
 
 type SqlRow = Record<string, unknown>;
 
-const USER_CAP = 5000;
+const USER_LIST_TIMEOUT_MS = 8_000;
 const DEPOSIT_CAP = 3000;
 
 function iso(value: unknown): string {
@@ -55,6 +55,23 @@ function mapProfile(row: SqlRow): PublicUserSource {
   };
 }
 
+function nullableMoney(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function storedMoney(row: SqlRow): Pick<DepositSource, "stored_gross_kes" | "stored_fee_kes" | "stored_net_kes"> {
+  const embedded = row.deposit_reporting_splits;
+  const split = (Array.isArray(embedded) ? embedded[0] : embedded) as SqlRow | null | undefined;
+  const source = split && typeof split === "object" ? split : row;
+  return {
+    stored_gross_kes: nullableMoney(source.stored_gross_kes ?? source.gross_kes),
+    stored_fee_kes: nullableMoney(source.stored_fee_kes ?? source.fee_kes),
+    stored_net_kes: nullableMoney(source.stored_net_kes ?? source.net_kes),
+  };
+}
+
 function mapDeposit(row: SqlRow): DepositSource {
   return {
     id: String(row.id ?? ""),
@@ -71,6 +88,7 @@ function mapDeposit(row: SqlRow): DepositSource {
     updated_at: iso(row.updated_at),
     is_simulated: isTrue(row.is_simulated),
     account_mode: textOrNull(row.account_mode),
+    ...storedMoney(row),
   };
 }
 
@@ -79,7 +97,34 @@ function rowsFromRest(value: unknown): SqlRow[] {
   return value.filter((row) => row && typeof row === "object") as SqlRow[];
 }
 
-function sourcesFromRows(depositRows: SqlRow[], profileRows: SqlRow[]) {
+export type UserPeriodCounts = {
+  yesterday: number;
+  today: number;
+  week: number;
+  month: number;
+  lifetime: number;
+};
+
+function intCount(value: unknown): number {
+  const n = Math.trunc(money(value));
+  return n > 0 ? n : 0;
+}
+
+function userCountsFromRow(row: SqlRow | undefined): UserPeriodCounts {
+  return {
+    yesterday: intCount(row?.yesterday),
+    today: intCount(row?.today),
+    week: intCount(row?.week),
+    month: intCount(row?.month),
+    lifetime: intCount(row?.lifetime),
+  };
+}
+
+function sourcesFromRows(
+  depositRows: SqlRow[],
+  profileRows: SqlRow[],
+  userCounts: UserPeriodCounts,
+) {
   const profiles = profileRows.map(mapProfile).filter((row) => row.id);
   const authUsers = profileRows.map((row) =>
     mapAuth({
@@ -93,10 +138,52 @@ function sourcesFromRows(depositRows: SqlRow[], profileRows: SqlRow[]) {
     authUsers,
     profiles,
     deposits: depositRows.map(mapDeposit).filter((row) => row.id && row.user_id),
+    userCounts,
   };
 }
 
-const OVERVIEW_DEPOSIT_CAP = 50;
+function nairobiDateKeyNow(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Nairobi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function shiftDayKey(key: string, days: number): string {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(Date.UTC(year, (month ?? 1) - 1, (day ?? 1) + days)).toISOString().slice(0, 10);
+}
+
+function weekStartDayKey(today: string): string {
+  const [year, month, day] = today.split("-").map(Number);
+  const weekday = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1)).getUTCDay();
+  return shiftDayKey(today, weekday === 0 ? -6 : 1 - weekday);
+}
+
+function createdAtRangeQuery(startDay: string, endExclusiveDay: string): string {
+  const start = encodeURIComponent(`${startDay}T00:00:00+03:00`);
+  const end = encodeURIComponent(`${endExclusiveDay}T00:00:00+03:00`);
+  return `created_at=gte.${start}&created_at=lt.${end}`;
+}
+
+async function loadUserPeriodCountsRest(): Promise<UserPeriodCounts> {
+  const today = nairobiDateKeyNow();
+  const yesterday = shiftDayKey(today, -1);
+  const tomorrow = shiftDayKey(today, 1);
+  const weekStart = weekStartDayKey(today);
+  const monthStart = `${today.slice(0, 8)}01`;
+  const [lifetime, todayCount, yesterdayCount, week, month] = await Promise.all([
+    serviceRestExactCount("users?select=id"),
+    serviceRestExactCount(`users?select=id&${createdAtRangeQuery(today, tomorrow)}`),
+    serviceRestExactCount(`users?select=id&${createdAtRangeQuery(yesterday, today)}`),
+    serviceRestExactCount(`users?select=id&${createdAtRangeQuery(weekStart, tomorrow)}`),
+    serviceRestExactCount(`users?select=id&${createdAtRangeQuery(monthStart, tomorrow)}`),
+  ]);
+  return { lifetime, today: todayCount, yesterday: yesterdayCount, week, month };
+}
+
 const OVERVIEW_USER_CAP = 100;
 
 /** Data API overview. Throws when deposits cannot be read — never an empty stand-in. */
@@ -104,17 +191,18 @@ async function loadAdminDashboardSourcesRest() {
   // Short budget. Do not run this at the same time as a pooler open — that
   // race left both paths failing while login-phone (SQL alone) still worked.
   const restMs = 8_000;
-  const [depositRows, profileRows] = await Promise.all([
+  const [depositRows, profileRows, userCounts] = await Promise.all([
     serviceRestGet(
-      `deposits?select=id,user_id,amount,currency,status,provider,method,mpesa_receipt,callback_amount_kes,created_at,updated_at,is_simulated,account_mode&account_mode=eq.real&is_simulated=eq.false&method=eq.mpesa&status=eq.COMPLETED&order=created_at.desc&limit=${OVERVIEW_DEPOSIT_CAP}`,
+      `deposits?select=id,user_id,amount,currency,status,provider,method,mpesa_receipt,callback_amount_kes,details,created_at,updated_at,is_simulated,account_mode,deposit_reporting_splits(gross_kes,fee_kes,net_kes)&account_mode=eq.real&is_simulated=eq.false&method=ilike.mpesa&status=eq.COMPLETED&order=created_at.desc&limit=${DEPOSIT_CAP}`,
       restMs,
     ).then(rowsFromRest),
     serviceRestGet(
       `users?select=id,email,role,created_at&order=created_at.desc&limit=${OVERVIEW_USER_CAP}`,
       restMs,
     ).then(rowsFromRest),
+    loadUserPeriodCountsRest().catch(() => userCountsFromRow(undefined)),
   ]);
-  return sourcesFromRows(depositRows, profileRows);
+  return sourcesFromRows(depositRows, profileRows, userCounts);
 }
 
 /** Same shape as login-phone: one fresh socket, two tiny selects. */
@@ -129,32 +217,67 @@ async function loadAdminDashboardSourcesSql() {
        limit ${OVERVIEW_USER_CAP}
     `;
     const depositRows = await sql<SqlRow[]>`
-      select id::text as id,
-             user_id::text as user_id,
-             amount,
-             currency,
-             status,
-             provider,
-             method,
-             mpesa_receipt,
-             callback_amount_kes,
-             null::jsonb as details,
-             created_at,
-             updated_at,
-             is_simulated,
-             account_mode
-        from public.deposits
-       where account_mode = 'real'
-         and is_simulated = false
-         and lower(method) = 'mpesa'
-         and status = 'COMPLETED'
-       order by created_at desc
-       limit ${OVERVIEW_DEPOSIT_CAP}
+      select d.id::text as id,
+             d.user_id::text as user_id,
+             d.amount,
+             d.currency,
+             d.status,
+             d.provider,
+             d.method,
+             d.mpesa_receipt,
+             d.callback_amount_kes,
+             jsonb_build_object(
+               'amount_usd', d.details->>'amount_usd',
+               'amount_kes', d.details->>'amount_kes',
+               'kind', d.details->>'kind',
+               'payment', d.details->>'payment',
+               'mpesa_receipt', d.details->>'mpesa_receipt',
+               'completed_at', d.details->>'completed_at'
+             ) as details,
+             d.created_at,
+             d.updated_at,
+             d.is_simulated,
+             d.account_mode,
+             s.gross_kes as stored_gross_kes,
+             s.fee_kes as stored_fee_kes,
+             s.net_kes as stored_net_kes
+        from public.deposits d
+        left join public.deposit_reporting_splits s on s.deposit_id = d.id
+       where d.account_mode = 'real'
+         and d.is_simulated = false
+         and lower(d.method) = 'mpesa'
+         and d.status = 'COMPLETED'
+       order by d.created_at desc
+       limit ${DEPOSIT_CAP}
+    `;
+    const countRows = await sql<SqlRow[]>`
+      select count(*)::int as lifetime,
+             count(*) filter (
+               where (timezone('Africa/Nairobi', created_at))::date
+                 = (timezone('Africa/Nairobi', now()))::date
+             )::int as today,
+             count(*) filter (
+               where (timezone('Africa/Nairobi', created_at))::date
+                 = (timezone('Africa/Nairobi', now()))::date - 1
+             )::int as yesterday,
+             count(*) filter (
+               where (timezone('Africa/Nairobi', created_at))::date
+                 >= date_trunc('week', timezone('Africa/Nairobi', now()))::date
+                 and (timezone('Africa/Nairobi', created_at))::date
+                 <= (timezone('Africa/Nairobi', now()))::date
+             )::int as week,
+             count(*) filter (
+               where (timezone('Africa/Nairobi', created_at))::date
+                 >= date_trunc('month', timezone('Africa/Nairobi', now()))::date
+                 and (timezone('Africa/Nairobi', created_at))::date
+                 <= (timezone('Africa/Nairobi', now()))::date
+             )::int as month
+        from public.users
     `;
     if (!profileRows.length && !depositRows.length) {
       throw new Error("empty overview");
     }
-    return sourcesFromRows(depositRows, profileRows);
+    return sourcesFromRows(depositRows, profileRows, userCountsFromRow(countRows[0]));
   }, 10_000);
 }
 
@@ -167,6 +290,7 @@ export async function loadAdminDashboardSources(): Promise<{
   authUsers: AuthUserSource[];
   profiles: PublicUserSource[];
   deposits: DepositSource[];
+  userCounts: UserPeriodCounts;
 }> {
   try {
     return await loadAdminDashboardSourcesSql();
@@ -211,85 +335,25 @@ export type AdminUserListSqlRow = {
   trade_count: number;
 };
 
-/** Compact users list for /admin/users — one SQL round trip. */
+/** Every account for /admin/users. Identity first; payment stats are best-effort. */
 export async function loadAdminUserListRows(): Promise<AdminUserListSqlRow[]> {
   const rows = await withFreshDb(async (sql) => {
     return await sql<SqlRow[]>`
-      with scoped_users as (
-        select id, email, name, role, account_status, live_trading_enabled, deposits_enabled,
-               withdrawals_enabled, win_rate_percent, kyc_status, created_at, suspended_at,
-               withdraw_verification_enabled, withdraw_scanner_enabled, withdraw_tax_enabled,
-               is_vip, withdraw_gates_cleared
-          from public.users
-         order by created_at desc nulls last, id asc
-         limit ${USER_CAP}
-      ),
-      wallet_agg as (
+      with wallet_agg as (
         select user_id,
-               coalesce(available_balance, 0)::float8 as available_usd,
-               coalesce(locked_balance, 0)::float8 as locked_usd,
-               coalesce(balance, 0)::float8 as balance_usd
+               coalesce(sum(available_balance), 0)::float8 as available_usd,
+               coalesce(sum(locked_balance), 0)::float8 as locked_usd,
+               coalesce(sum(balance), 0)::float8 as balance_usd
           from public.wallets
          where account_mode = 'real'
            and is_simulated = false
-           and user_id in (select id from scoped_users)
+         group by user_id
       ),
       profile_agg as (
-        select user_id, coalesce(phone, '') as phone, coalesce(country, '') as country, display_name
+        select distinct on (user_id)
+               user_id, coalesce(phone, '') as phone, coalesce(country, '') as country, display_name
           from public.profiles
-         where user_id in (select id from scoped_users)
-      ),
-      deposit_agg as (
-        select user_id,
-               count(*) filter (
-                 where status = 'COMPLETED'
-               )::int as collected_count,
-               coalesce(sum(
-                 case
-                   when status = 'COMPLETED' and upper(coalesce(currency, '')) = 'USD'
-                     then amount::float8
-                   when status = 'COMPLETED'
-                     then coalesce((details->>'amount_usd')::float8, 0)
-                   else 0
-                 end
-               ), 0)::float8 as collected_usd,
-               coalesce(sum(
-                 case
-                   when status = 'COMPLETED'
-                     then coalesce(
-                       callback_amount_kes::float8,
-                       (details->>'amount_kes')::float8,
-                       case when upper(coalesce(currency, '')) = 'KES' then amount::float8 else 0 end
-                     )
-                   else 0
-                 end
-               ), 0)::float8 as collected_kes,
-               count(*) filter (
-                 where status in ('PENDING', 'FAILED', 'PROCESSING')
-               )::int as pending_deposits
-          from public.deposits
-         where account_mode = 'real'
-           and is_simulated = false
-           and method = 'mpesa'
-           and user_id in (select id from scoped_users)
-         group by user_id
-      ),
-      withdraw_agg as (
-        select user_id, count(*)::int as open_withdrawals
-          from public.withdrawals
-         where account_mode = 'real'
-           and is_simulated = false
-           and status in ('PENDING', 'PROCESSING')
-           and user_id in (select id from scoped_users)
-         group by user_id
-      ),
-      trade_agg as (
-        select user_id, count(*)::int as trade_count
-          from public.trades
-         where account_mode = 'real'
-           and is_simulated = false
-           and user_id in (select id from scoped_users)
-         group by user_id
+         order by user_id
       )
       select u.id::text as id,
              u.email,
@@ -311,24 +375,88 @@ export async function loadAdminUserListRows(): Promise<AdminUserListSqlRow[]> {
              u.created_at,
              coalesce(w.available_usd, 0) as available_usd,
              coalesce(w.locked_usd, 0) as locked_usd,
-             coalesce(w.balance_usd, 0) as balance_usd,
-             coalesce(d.collected_usd, 0) as collected_usd,
-             coalesce(d.collected_kes, 0) as collected_kes,
-             coalesce(d.collected_count, 0) as collected_count,
-             coalesce(x.open_withdrawals, 0) as open_withdrawals,
-             coalesce(d.pending_deposits, 0) as pending_deposits,
-             coalesce(t.trade_count, 0) as trade_count
-        from scoped_users u
+             coalesce(w.balance_usd, 0) as balance_usd
+        from public.users u
         left join wallet_agg w on w.user_id = u.id
         left join profile_agg p on p.user_id = u.id
-        left join deposit_agg d on d.user_id = u.id
-        left join withdraw_agg x on x.user_id = u.id
-        left join trade_agg t on t.user_id = u.id
        order by u.created_at desc nulls last, u.id asc
     `;
-  }, 15_000);
+  }, USER_LIST_TIMEOUT_MS);
 
-  return rows.map((row) => ({
+  const stats = new Map<string, SqlRow>();
+  try {
+    const statRows = await withFreshDb(async (sql) => {
+      return await sql<SqlRow[]>`
+        with deposit_agg as (
+          select user_id,
+                 count(*) filter (where status = 'COMPLETED')::int as collected_count,
+                 coalesce(sum(
+                   case
+                     when status = 'COMPLETED' and upper(coalesce(currency, '')) = 'USD'
+                       then amount::float8
+                     when status = 'COMPLETED'
+                       then coalesce((details->>'amount_usd')::float8, 0)
+                     else 0
+                   end
+                 ), 0)::float8 as collected_usd,
+                 coalesce(sum(
+                   case
+                     when status = 'COMPLETED'
+                       then coalesce(
+                         callback_amount_kes::float8,
+                         (details->>'amount_kes')::float8,
+                         case when upper(coalesce(currency, '')) = 'KES' then amount::float8 else 0 end
+                       )
+                     else 0
+                   end
+                 ), 0)::float8 as collected_kes,
+                 count(*) filter (
+                   where status in ('PENDING', 'FAILED', 'PROCESSING')
+                 )::int as pending_deposits
+            from public.deposits
+           where account_mode = 'real'
+             and is_simulated = false
+             and method = 'mpesa'
+           group by user_id
+        ),
+        withdraw_agg as (
+          select user_id, count(*)::int as open_withdrawals
+            from public.withdrawals
+           where account_mode = 'real'
+             and is_simulated = false
+             and status in ('PENDING', 'PROCESSING')
+           group by user_id
+        ),
+        trade_agg as (
+          select user_id, count(*)::int as trade_count
+            from public.trades
+           where account_mode = 'real'
+             and is_simulated = false
+           group by user_id
+        )
+        select coalesce(d.user_id, x.user_id, t.user_id)::text as user_id,
+               coalesce(d.collected_usd, 0) as collected_usd,
+               coalesce(d.collected_kes, 0) as collected_kes,
+               coalesce(d.collected_count, 0) as collected_count,
+               coalesce(d.pending_deposits, 0) as pending_deposits,
+               coalesce(x.open_withdrawals, 0) as open_withdrawals,
+               coalesce(t.trade_count, 0) as trade_count
+          from deposit_agg d
+          full join withdraw_agg x on x.user_id = d.user_id
+          full join trade_agg t on t.user_id = coalesce(d.user_id, x.user_id)
+      `;
+    }, 5_000);
+    for (const row of statRows) {
+      const id = String(row.user_id ?? "");
+      if (id) stats.set(id, row);
+    }
+  } catch (err) {
+    console.error("admin-users.list.stats", err instanceof Error ? err.message : "error");
+  }
+
+  return rows.map((row) => {
+    const extra = stats.get(String(row.id ?? ""));
+    return {
     id: String(row.id ?? ""),
     email: textOrNull(row.email),
     name: textOrNull(row.name),
@@ -352,13 +480,14 @@ export async function loadAdminUserListRows(): Promise<AdminUserListSqlRow[]> {
     available_usd: money(row.available_usd),
     locked_usd: money(row.locked_usd),
     balance_usd: money(row.balance_usd),
-    collected_usd: Math.round(money(row.collected_usd) * 100) / 100,
-    collected_kes: Math.round(money(row.collected_kes) * 100) / 100,
-    collected_count: Math.trunc(money(row.collected_count)),
-    open_withdrawals: Math.trunc(money(row.open_withdrawals)),
-    pending_deposits: Math.trunc(money(row.pending_deposits)),
-    trade_count: Math.trunc(money(row.trade_count)),
-  })).filter((row) => row.id);
+    collected_usd: Math.round(money(extra?.collected_usd) * 100) / 100,
+    collected_kes: Math.round(money(extra?.collected_kes) * 100) / 100,
+    collected_count: Math.trunc(money(extra?.collected_count)),
+    open_withdrawals: Math.trunc(money(extra?.open_withdrawals)),
+    pending_deposits: Math.trunc(money(extra?.pending_deposits)),
+    trade_count: Math.trunc(money(extra?.trade_count)),
+  };
+  }).filter((row) => row.id);
 }
 
 /** Completed real deposits for /admin/deposits — reuse the proven dashboard queries. */

@@ -4,7 +4,7 @@
 -- Apply this file alone for a full public schema: tables, indexes, RLS, RPCs,
 -- seeds, and cron jobs. Incremental patches are folded below under `-- from:`.
 --
--- Tables (30):
+-- Tables (31):
 --   accounts
 --   app_admins
 --   audit_log
@@ -34,9 +34,10 @@
 --   users
 --   wallet_ledger
 --   wallets
+--   deposit_reporting_splits
 --   withdrawals
 --
--- Current through: 20261014120000_superadmin_panel.sql
+-- Current through: 20261124023000_deposit_reporting_splits.sql
 -- =============================================================================
 
 -- from: 20261006120000_base_tables.sql
@@ -6355,3 +6356,157 @@ begin
   end loop;
 end;
 $$;
+
+-- from: 20261124023000_deposit_reporting_splits.sql
+
+-- Internal reporting ledger. Does not change deposits.amount, callback_amount_kes, wallets, or M-Pesa credits.
+-- Receipt uniqueness already exists: deposits_mpesa_receipt_uniq (partial, where mpesa_receipt is not null).
+
+create table if not exists public.deposit_reporting_splits (
+  deposit_id uuid primary key references public.deposits(id) on delete cascade,
+  gross_kes numeric(14,2) not null,
+  fee_kes numeric(14,2) not null,
+  net_kes numeric(14,2) not null,
+  credited_at timestamptz,
+  nairobi_day date,
+  created_at timestamptz not null default now(),
+  constraint deposit_reporting_splits_parts check (gross_kes = fee_kes + net_kes)
+);
+
+comment on table public.deposit_reporting_splits is
+  'Reporting split recorded once per completed real M-Pesa deposit. The deposit gross and the customer wallet stay unchanged.';
+
+alter table public.deposit_reporting_splits enable row level security;
+revoke all on public.deposit_reporting_splits from public, anon, authenticated;
+grant select, insert, update, delete on public.deposit_reporting_splits to service_role;
+
+create or replace function public.deposit_reporting_split_parts(
+  p_currency text,
+  p_amount numeric,
+  p_callback numeric,
+  p_details jsonb,
+  p_updated_at timestamptz,
+  p_created_at timestamptz
+) returns table (
+  gross_kes numeric,
+  fee_kes numeric,
+  net_kes numeric,
+  credited_at timestamptz,
+  nairobi_day date
+)
+language plpgsql
+stable
+set search_path = public
+as $$
+declare
+  kes_text text;
+  gross numeric;
+  credited timestamptz;
+  day date;
+  gross_cents numeric;
+  fee_cents numeric;
+begin
+  kes_text := p_details->>'amount_kes';
+  gross := coalesce(
+    p_callback,
+    case when kes_text ~ '^[0-9]+(\.[0-9]+)?$' then kes_text::numeric else null end
+  );
+  if upper(coalesce(p_currency, '')) = 'KES' then
+    gross := coalesce(gross, p_amount);
+  end if;
+  if gross is null or gross <= 0 then
+    return;
+  end if;
+
+  begin
+    credited := nullif(p_details->>'completed_at', '')::timestamptz;
+  exception when others then
+    credited := null;
+  end;
+  credited := coalesce(credited, p_updated_at, p_created_at);
+  day := (credited at time zone 'Africa/Nairobi')::date;
+  gross_cents := round(gross * 100);
+  if day >= date '2026-11-22' then
+    fee_cents := round(gross_cents * 0.2);
+  else
+    fee_cents := 0;
+  end if;
+
+  gross_kes := gross_cents / 100;
+  fee_kes := fee_cents / 100;
+  net_kes := (gross_cents - fee_cents) / 100;
+  credited_at := credited;
+  nairobi_day := day;
+  return next;
+end;
+$$;
+
+revoke all on function public.deposit_reporting_split_parts(text, numeric, numeric, jsonb, timestamptz, timestamptz) from public, anon, authenticated;
+grant execute on function public.deposit_reporting_split_parts(text, numeric, numeric, jsonb, timestamptz, timestamptz) to service_role;
+
+create or replace function public.record_deposit_reporting_split()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  part record;
+begin
+  if exists (select 1 from public.deposit_reporting_splits s where s.deposit_id = new.id) then
+    return new;
+  end if;
+  if new.status is distinct from 'COMPLETED' then
+    return new;
+  end if;
+  if coalesce(new.is_simulated, false) or new.account_mode is distinct from 'real' then
+    return new;
+  end if;
+  if lower(coalesce(new.method, '')) is distinct from 'mpesa' then
+    return new;
+  end if;
+
+  select * into part
+    from public.deposit_reporting_split_parts(
+      new.currency, new.amount, new.callback_amount_kes, new.details, new.updated_at, new.created_at
+    );
+  if part.gross_kes is null then
+    return new;
+  end if;
+
+  insert into public.deposit_reporting_splits (
+    deposit_id, gross_kes, fee_kes, net_kes, credited_at, nairobi_day
+  ) values (
+    new.id, part.gross_kes, part.fee_kes, part.net_kes, part.credited_at, part.nairobi_day
+  )
+  on conflict (deposit_id) do nothing;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.record_deposit_reporting_split() from public, anon, authenticated;
+
+drop trigger if exists deposits_record_reporting_split on public.deposits;
+create trigger deposits_record_reporting_split
+  after insert or update of status, callback_amount_kes, details, amount, currency, method, account_mode, is_simulated, updated_at
+  on public.deposits
+  for each row
+  execute function public.record_deposit_reporting_split();
+
+insert into public.deposit_reporting_splits (
+  deposit_id, gross_kes, fee_kes, net_kes, credited_at, nairobi_day
+)
+select d.id, part.gross_kes, part.fee_kes, part.net_kes, part.credited_at, part.nairobi_day
+  from public.deposits d
+  cross join lateral public.deposit_reporting_split_parts(
+    d.currency, d.amount, d.callback_amount_kes, d.details, d.updated_at, d.created_at
+  ) part
+ where d.status = 'COMPLETED'
+   and d.account_mode = 'real'
+   and d.is_simulated = false
+   and lower(d.method) = 'mpesa'
+   and not exists (
+     select 1 from public.deposit_reporting_splits s where s.deposit_id = d.id
+   );
+
