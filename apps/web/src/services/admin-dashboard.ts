@@ -45,6 +45,7 @@ export interface AdminDashboard {
     earnedByDay: Record<string, number>
     /** Stored admin net KES by Nairobi day. Already retained, so the client must not take 20% again. */
     earnedKesByDay: Record<string, number>
+    hiddenKes: number | null
     userCount: number
     usersToday: number
     usersYesterday: number
@@ -135,6 +136,7 @@ function mapDashboard(data: Record<string, unknown>): AdminDashboard {
       earnedTotalKes: money(totals.earned_total_kes) ?? money(totals.collected_kes),
       earnedByDay: mapEarnedDays(totals.earned_by_day),
       earnedKesByDay: mapEarnedDays(totals.earned_kes_by_day),
+      hiddenKes: money(totals.hidden_kes),
       userCount: Number(totals.user_count),
       usersToday: Number(totals.users_today),
       usersYesterday: Number(totals.users_yesterday),

@@ -324,7 +324,7 @@ function DashboardPeriods({
     <div className="space-y-6">
       <section className="space-y-3" data-testid="admin-money-periods">
         <h2 className="font-display text-lg font-semibold text-paper">Customer payments and earnings</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {money.map((item) => (
             <Stat
               key={item.label}
@@ -381,7 +381,7 @@ function DashboardPeriods({
       </section>
       <section className="space-y-3" data-testid="admin-user-periods">
         <h2 className="font-display text-lg font-semibold text-paper">Users</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {users.map((item) => (
             <div key={item.label} data-testid={`admin-user-stat-${item.key}`}>
               <Stat label={item.label} value={String(item.value)} hint={item.hint} />

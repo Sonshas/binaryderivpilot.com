@@ -384,7 +384,7 @@ function RetainedShareSection() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Recorded retained amount"
-              value={formatEarnedKes(earnedSplit.hiddenKes)}
+              value={formatEarnedKes(dash.totals.hiddenKes ?? earnedSplit.hiddenKes)}
               hint="Kept off admin dashboards"
               tone="live"
             />

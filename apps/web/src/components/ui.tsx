@@ -316,11 +316,11 @@ export function Stat({
   tone?: 'demo' | 'live' | 'default'
 }) {
   return (
-    <div className="rounded-xl border border-line bg-ink-2/60 p-3.5">
+    <div className="min-w-0 rounded-xl border border-line bg-ink-2/60 p-3.5">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">{label}</p>
       <p
         className={cn(
-          'mt-1 font-mono text-lg font-semibold',
+          'mt-1 break-words font-mono text-lg font-semibold',
           tone === 'demo' && 'text-demo',
           tone === 'live' && 'text-live',
           !tone && 'text-paper',

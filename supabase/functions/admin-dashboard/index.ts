@@ -198,14 +198,12 @@ Deno.serve(async (req) => {
     // Override is gross, so regular admins get one 20% off that figure.
     // Without an override, the admin total is the sum of per-payment nets.
     const allocated = await allocationTotals(admin)
-    // The override is already reduced once for regular admins. New payments add
-    // the net recorded at confirmation, not another 20% of that net.
-    const adminEarned = settingsOverride(settingsRaw)
-      ? addRecordedKes(visibleEarnedKes(recordedKes), allocated.adminKes)
-      : (netKes ?? visibleEarnedKes(recordedKes))
-    const superadminGross = settingsOverride(settingsRaw)
+    // Each payment already has one stored net. Sum those nets. Do not add the
+    // old override on top, and do not take another 20%.
+    const adminEarned = netKes ?? (settingsOverride(settingsRaw) ? visibleEarnedKes(recordedKes) : visibleEarnedKes(recordedKes))
+    const superadminGross = fullKes ?? (settingsOverride(settingsRaw)
       ? addRecordedKes(recordedKes, allocated.grossKes)
-      : recordedKes
+      : recordedKes)
     const customerTotals = collectedTotals(customerCollected)
     const earnedDays = earnedByDay(netCollected, (row) => row.amount_usd)
     const earnedKesDays = earnedByDay(netCollected, (row) => row.amount_kes)
