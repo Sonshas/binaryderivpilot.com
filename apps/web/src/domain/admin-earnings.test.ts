@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import webFee from "./admin-hidden-fee.ts?raw";
 import edgeFee from "../../../../supabase/functions/_shared/admin-hidden-fee.ts?raw";
-import { withNetAmounts } from "@/domain/admin-hidden-fee";
+import { neutralReceivedNote, withNetAmounts } from "@/domain/admin-hidden-fee";
+import { usdToKes } from "@/domain/withdrawals";
 import {
   canSeeHiddenShare,
   carvedHiddenDeposits,
@@ -64,6 +65,12 @@ describe("splitDepositEarnings", () => {
     expect(withLater.slice(0, 4).map((row) => reportingSplit(row.usd, row.at).net)).toEqual([8, 8, 8, 56]);
     expect(reportingSplit(10_000, "2026-11-22T12:00:00.000Z")).toEqual({ gross: 10_000, fee: 2_000, net: 8_000 });
     expect(reportingSplit(6_500, "2026-11-23T20:54:00.000Z")).toEqual({ gross: 6_500, fee: 1_300, net: 5_200 });
+    expect(reportingSplit(1_600, "2026-11-24T03:11:16.832Z")).toEqual({ gross: 1_600, fee: 320, net: 1_280 });
+    const usdOf1600 = reportingSplit(12.31, "2026-11-24T03:11:16.832Z");
+    expect(usdOf1600).toEqual({ gross: 12.31, fee: 2.46, net: 9.85 });
+    expect(usdToKes(usdOf1600.net, 130)).toBe(1_281);
+    expect(usdToKes(usdOf1600.net, 130.15)).toBe(1_282);
+    expect(neutralReceivedNote("M-Pesa deposit KES 1600 · UKO2342F49")).toBe("M-Pesa deposit · UKO2342F49");
     const nov23 = reportingSplit(67_900, "2026-11-23T12:00:00.000Z");
     expect(nov23).toEqual({ gross: 67_900, fee: 13_580, net: 54_320 });
     expect(reportingSplit(nov23.net, "2026-11-23T12:00:00.000Z").net).not.toBe(nov23.net);

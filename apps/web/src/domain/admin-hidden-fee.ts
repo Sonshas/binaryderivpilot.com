@@ -101,6 +101,23 @@ export function splitRowAt(row: SplitMoneyRow): string {
   return row.credited_at ?? row.created_at ?? "";
 }
 
+/**
+ * Deposit notes store the M-Pesa KES figure. Regular admin copy drops that figure
+ * so the row reads as an ordinary receipt, without a second amount beside the net.
+ */
+export function neutralReceivedNote(note: string | null | undefined): string {
+  const raw = (note ?? "").trim();
+  if (!raw) return "M-Pesa deposit";
+  const withoutAmount = raw
+    .replace(/\bKES\s*[\d,]+(?:\.\d+)?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([·•])/g, " $1")
+    .replace(/([·•])\s+/g, "$1 ")
+    .trim();
+  const cleaned = withoutAmount.replace(/^[\s·•-]+|[\s·•-]+$/g, "").trim();
+  return cleaned.length > 0 ? cleaned : "M-Pesa deposit";
+}
+
 /** Admin payload: amount fields are the net. Gross, fee, and the stored split are not copied onto the row. */
 export function withNetAmounts<T extends SplitMoneyRow>(row: T): T {
   const at = splitRowAt(row);

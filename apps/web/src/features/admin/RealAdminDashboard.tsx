@@ -66,6 +66,13 @@ function depositUsd(row: DashboardDepositRow, rate = depositRate()): number {
   return 0
 }
 
+/** Authorized KES from the API. Do not convert the net USD back into KES — that rounds off the recorded net. */
+function depositKes(row: DashboardDepositRow, rate = depositRate()): number | null {
+  if (row.amountKes != null && Number.isFinite(row.amountKes)) return row.amountKes
+  if (row.amountUsd != null && Number.isFinite(row.amountUsd)) return usdToKes(row.amountUsd, rate)
+  return null
+}
+
 /** Amounts on this dashboard are already the admin-visible payments. */
 function adminShownAmounts(rows: DashboardDepositRow[], rate: number): Map<string, number> {
   const shown = new Map<string, number>()
@@ -114,6 +121,14 @@ export function RealAdminDashboard() {
     () => adminShownAmounts(data?.collected ?? [], rate),
     [data?.collected, rate],
   )
+  const shownKes = useMemo(() => {
+    const shown = new Map<string, number>()
+    for (const row of data?.collected ?? []) {
+      const kes = depositKes(row, rate)
+      if (kes != null) shown.set(row.id, kes)
+    }
+    return shown
+  }, [data?.collected, rate])
   const viewerCollected = useMemo(
     () => data?.collected ?? [],
     [data?.collected],
@@ -172,10 +187,12 @@ export function RealAdminDashboard() {
             lifetimeKes={earnedKes}
             visibleEarnedKes={earnedKes}
             shownAmounts={shownAmounts}
+            shownKes={shownKes}
           />
           <DailyDepositsPanel
             rows={data.collected}
             shownAmounts={shownAmounts}
+            shownKes={shownKes}
             rate={rate}
           />
 
@@ -187,7 +204,7 @@ export function RealAdminDashboard() {
             {viewerCollected.length === 0 ? (
               <p className="text-sm text-mist">No credited M-Pesa deposits.</p>
             ) : (
-              <DepositTable rows={viewerCollected} rate={rate} shownAmounts={shownAmounts} />
+              <DepositTable rows={viewerCollected} rate={rate} shownAmounts={shownAmounts} shownKes={shownKes} />
             )}
           </section>
         </>
@@ -213,11 +230,13 @@ function DashboardPeriods({
   lifetimeKes,
   visibleEarnedKes,
   shownAmounts,
+  shownKes,
 }: {
   data: AdminDashboard
   lifetimeKes: number
   visibleEarnedKes: number
   shownAmounts: Map<string, number>
+  shownKes: Map<string, number>
 }) {
   const rate = depositRate()
   const today = nairobiDateKey(new Date().toISOString()) ?? '1970-01-01'
@@ -230,38 +249,44 @@ function DashboardPeriods({
     Math.round(
       (rows.reduce((sum, row) => sum + (shownAmounts.get(row.id) ?? 0), 0) + Number.EPSILON) * 100,
     ) / 100
+  const sumKes = (rows: DashboardDepositRow[]) =>
+    rows.reduce((sum, row) => sum + (shownKes.get(row.id) ?? 0), 0)
   const inDay = (day: string) => data.collected.filter((row) => nairobiDateKey(atOf(row)) === day)
   const inSpan = (start: string) =>
     data.collected.filter((row) => {
       const key = nairobiDateKey(atOf(row))
       return key != null && key >= start && key <= today && shownAmounts.has(row.id)
     })
-  const yesterdayUsd = sumShown(inDay(yesterday).filter((row) => shownAmounts.has(row.id)))
+  const yesterdayRows = inDay(yesterday).filter((row) => shownAmounts.has(row.id))
+  const todayRows = inDay(today).filter((row) => shownAmounts.has(row.id))
+  const weekRows = inSpan(weekStart)
+  const monthRows = inSpan(monthStart)
+  const yesterdayUsd = sumShown(yesterdayRows)
   const yesterdaySplit = splitEqualPartners(yesterdayUsd)
   const lifetimeUsd = kesToUsd(visibleEarnedKes, rate)
   const money = [
     {
       label: 'Total money yesterday',
       value: yesterdayUsd,
-      kes: usdToKes(yesterdayUsd, rate),
+      kes: sumKes(yesterdayRows),
       hint: `Nairobi day ${yesterday}`,
     },
     {
       label: 'Total money today',
-      value: sumShown(inDay(today).filter((row) => shownAmounts.has(row.id))),
-      kes: null as number | null,
+      value: sumShown(todayRows),
+      kes: sumKes(todayRows),
       hint: 'Since midnight',
     },
     {
       label: 'Total money this week',
-      value: sumShown(inSpan(weekStart)),
-      kes: null as number | null,
+      value: sumShown(weekRows),
+      kes: sumKes(weekRows),
       hint: 'Since Monday',
     },
     {
       label: 'Total money this month',
-      value: sumShown(inSpan(monthStart)),
-      kes: null as number | null,
+      value: sumShown(monthRows),
+      kes: sumKes(monthRows),
       hint: 'Since the 1st',
     },
     {
@@ -297,7 +322,7 @@ function DashboardPeriods({
               key={item.label}
               label={item.label}
               value={item.earned ? formatEarnedKes(item.kes ?? 0) : formatMoney(item.value)}
-              subValue={item.earned ? undefined : formatKes(item.kes ?? usdToKes(item.value, rate))}
+              subValue={item.earned ? undefined : formatKes(item.kes ?? 0)}
               hint={item.hint}
               tone="live"
             />
@@ -362,10 +387,12 @@ function DashboardPeriods({
 function DailyDepositsPanel({
   rows,
   shownAmounts,
+  shownKes,
   rate,
 }: {
   rows: DashboardDepositRow[]
   shownAmounts: Map<string, number>
+  shownKes: Map<string, number>
   rate: number
 }) {
   const today = nairobiDateKey(new Date().toISOString()) ?? '1970-01-01'
@@ -386,6 +413,10 @@ function DailyDepositsPanel({
         (dayRows.reduce((sum, row) => sum + (shownAmounts.get(row.id) ?? 0), 0) + Number.EPSILON) * 100,
       ) / 100,
     [dayRows, shownAmounts],
+  )
+  const earnedDayKes = useMemo(
+    () => dayRows.reduce((sum, row) => sum + (shownKes.get(row.id) ?? 0), 0),
+    [dayRows, shownKes],
   )
   const daySplit = useMemo(() => splitEqualPartners(earnedUsd), [earnedUsd])
 
@@ -448,7 +479,7 @@ function DailyDepositsPanel({
         <Stat
           label={`Money earned · ${formatDayLabel(selectedDay)}`}
           value={formatMoney(earnedUsd)}
-          subValue={formatKes(usdToKes(earnedUsd, rate))}
+          subValue={formatKes(earnedDayKes)}
           hint="Completed payments credited that day"
           tone="live"
         />
@@ -471,7 +502,7 @@ function DailyDepositsPanel({
           No completed deposits on {formatDayLabel(selectedDay)}.
         </p>
       ) : (
-        <DepositTable rows={dayRows} rate={rate} shownAmounts={shownAmounts} />
+        <DepositTable rows={dayRows} rate={rate} shownAmounts={shownAmounts} shownKes={shownKes} />
       )}
     </section>
   )
@@ -481,10 +512,12 @@ function DepositTable({
   rows,
   rate,
   shownAmounts,
+  shownKes,
 }: {
   rows: DashboardDepositRow[]
   rate: number
   shownAmounts?: Map<string, number>
+  shownKes?: Map<string, number>
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-line">
@@ -502,7 +535,8 @@ function DepositTable({
         <tbody>
           {rows.map((row) => {
             const shown = shownAmounts?.get(row.id)
-            const kes = shown != null ? formatKes(usdToKes(shown, rate)) : kesLine(row.amountUsd, row.amountKes, rate)
+            const recordedKes = shownKes?.get(row.id)
+            const kes = recordedKes != null ? formatKes(recordedKes) : kesLine(row.amountUsd, row.amountKes, rate)
             return (
               <tr key={row.id} className="border-b border-line/80 last:border-0" data-testid="admin-deposit-row">
                 <td className="px-3 py-2 text-paper">{payer(row)}</td>

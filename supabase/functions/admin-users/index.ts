@@ -4,7 +4,7 @@ import { readAllPages, readByIds } from '../_shared/admin-batch.ts'
 import { isCreditedDeposit, splitMpesaDeposits, toDashboardDeposit, type DepositSource } from '../_shared/admin-dashboard.ts'
 import { appRole, isAdmin, writeAudit } from '../_shared/admin-staff.ts'
 import { loadAdminDashboardSources, loadAdminDepositsList, loadAdminUserListRows } from '../_shared/direct-admin.ts'
-import { kesReportingSplit, reportingSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
+import { kesReportingSplit, neutralReceivedNote, reportingSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
 import { adminClient, corsHeaders, json, logEdgeError, userFromRequest } from '../_shared/server.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -27,6 +27,22 @@ function storedFromRow(row: Row): { stored_gross_kes: number | null; stored_fee_
     stored_gross_kes: split ? numOrNull(split.gross_kes) : null,
     stored_fee_kes: split ? numOrNull(split.fee_kes) : null,
     stored_net_kes: split ? numOrNull(split.net_kes) : null,
+  }
+}
+
+function seesFullBreakdown(user: User): boolean {
+  return appRole(user) === 'superadmin'
+}
+
+/** Regular admin deposit rows show the authorized net and a receipt note with no M-Pesa gross figure. */
+function presentTransaction(row: Row, full: boolean): Row {
+  if (full || String(row.type ?? '') !== 'deposit') return row
+  const amount = Number(row.amount)
+  const at = String(row.created_at ?? '')
+  return {
+    ...row,
+    amount: Number.isFinite(amount) && amount > 0 ? reportingSplit(amount, at).net : row.amount,
+    note: neutralReceivedNote(typeof row.note === 'string' ? row.note : ''),
   }
 }
 
@@ -68,6 +84,7 @@ function scrubCompletedDeposit(row: Row): Row {
   const detailKes = Number(details.amount_kes)
   const detailUsd = Number(details.amount_usd)
   const nextDetails = { ...details }
+  delete nextDetails.confirmation
   const storedNet = kesReportingSplit({
     amount_kes: Number.isFinite(callback) && callback > 0 ? callback : Number.isFinite(detailKes) ? detailKes : null,
     amount_usd: null,
@@ -464,9 +481,11 @@ Deno.serve(async (req) => {
           balance_usd: money(walletRes.data?.balance),
           wallet_id: walletRes.data?.id ?? null,
         },
-        deposits: (depositsRes.data ?? []).map((row) => scrubCompletedDeposit(row as Row)),
+        deposits: (depositsRes.data ?? []).map((row) =>
+          seesFullBreakdown(actor) ? (row as Row) : scrubCompletedDeposit(row as Row),
+        ),
         withdrawals: withdrawalsRes.data ?? [],
-        transactions: txRes.data ?? [],
+        transactions: (txRes.data ?? []).map((row) => presentTransaction(row as Row, seesFullBreakdown(actor))),
         trades: tradesRes.data ?? [],
         tickets: ticketsRes.data ?? [],
         kyc_reviews: kycRes.data ?? [],
@@ -796,8 +815,9 @@ Deno.serve(async (req) => {
       if (error) return json({ error: error.message }, 500)
       const users = await loadUserRows(admin)
       const emailById = new Map(users.map((u) => [String(u.id), (u.email as string | null) ?? null]))
+      const full = seesFullBreakdown(actor)
       const rows = (data ?? []).map((row) => ({
-        ...row,
+        ...presentTransaction(row as Row, full),
         user_email: emailById.get(String(row.user_id)) ?? null,
       }))
       return json({ rows })
