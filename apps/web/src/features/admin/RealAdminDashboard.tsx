@@ -66,7 +66,7 @@ function depositUsd(row: DashboardDepositRow, rate = depositRate()): number {
   return 0
 }
 
-/** Authorized KES from the API. Do not convert the net USD back into KES — that rounds off the recorded net. */
+/** Customer M-Pesa KES. Do not rebuild this from the wallet USD. */
 function depositKes(row: DashboardDepositRow, rate = depositRate()): number | null {
   if (row.amountKes != null && Number.isFinite(row.amountKes)) return row.amountKes
   if (row.amountUsd != null && Number.isFinite(row.amountUsd)) return usdToKes(row.amountUsd, rate)
@@ -188,18 +188,20 @@ export function RealAdminDashboard() {
             visibleEarnedKes={earnedKes}
             shownAmounts={shownAmounts}
             shownKes={shownKes}
+            earnedByDay={data.totals.earnedByDay}
           />
           <DailyDepositsPanel
             rows={data.collected}
             shownAmounts={shownAmounts}
             shownKes={shownKes}
+            earnedByDay={data.totals.earnedByDay}
             rate={rate}
           />
 
           <section className="space-y-3" data-testid="admin-dashboard-collected">
-            <h2 className="font-display text-lg font-semibold text-paper">Money collected</h2>
+            <h2 className="font-display text-lg font-semibold text-paper">Customer payments</h2>
             <p className="text-sm text-mist">
-              {`Total earned ${formatEarnedKes(earnedKes)}`}
+              {`M-Pesa amounts customers paid. Earnings are separate: total earned ${formatEarnedKes(earnedKes)}. Wallet balances are the credited USD, not this list.`}
             </p>
             {viewerCollected.length === 0 ? (
               <p className="text-sm text-mist">No credited M-Pesa deposits.</p>
@@ -231,12 +233,14 @@ function DashboardPeriods({
   visibleEarnedKes,
   shownAmounts,
   shownKes,
+  earnedByDay,
 }: {
   data: AdminDashboard
   lifetimeKes: number
   visibleEarnedKes: number
   shownAmounts: Map<string, number>
   shownKes: Map<string, number>
+  earnedByDay: Record<string, number>
 }) {
   const rate = depositRate()
   const today = nairobiDateKey(new Date().toISOString()) ?? '1970-01-01'
@@ -262,39 +266,39 @@ function DashboardPeriods({
   const weekRows = inSpan(weekStart)
   const monthRows = inSpan(monthStart)
   const yesterdayUsd = sumShown(yesterdayRows)
-  const yesterdaySplit = splitEqualPartners(yesterdayUsd)
+  const yesterdaySplit = splitEqualPartners(earnedByDay[yesterday] ?? 0)
   const lifetimeUsd = kesToUsd(visibleEarnedKes, rate)
   const money = [
     {
-      label: 'Total money yesterday',
+      label: 'Customer payments yesterday',
       value: yesterdayUsd,
       kes: sumKes(yesterdayRows),
-      hint: `Nairobi day ${yesterday}`,
+      hint: `M-Pesa paid on ${yesterday}. Not the available balance.`,
     },
     {
-      label: 'Total money today',
+      label: 'Customer payments today',
       value: sumShown(todayRows),
       kes: sumKes(todayRows),
-      hint: 'Since midnight',
+      hint: 'M-Pesa paid since midnight. Not the available balance.',
     },
     {
-      label: 'Total money this week',
+      label: 'Customer payments this week',
       value: sumShown(weekRows),
       kes: sumKes(weekRows),
-      hint: 'Since Monday',
+      hint: 'M-Pesa paid since Monday. Not the available balance.',
     },
     {
-      label: 'Total money this month',
+      label: 'Customer payments this month',
       value: sumShown(monthRows),
       kes: sumKes(monthRows),
-      hint: 'Since the 1st',
+      hint: 'M-Pesa paid since the 1st. Not the available balance.',
     },
     {
       label: 'Total earned',
       value: lifetimeUsd,
       kes: visibleEarnedKes,
       earned: true,
-      hint: 'Total money earned',
+      hint: 'Earnings. Separate from customer payment volume.',
     },
   ]
   const userCounts = resolveUserPeriodCounts(data.users, today, {
@@ -315,14 +319,14 @@ function DashboardPeriods({
   return (
     <div className="space-y-6">
       <section className="space-y-3" data-testid="admin-money-periods">
-        <h2 className="font-display text-lg font-semibold text-paper">Money</h2>
+        <h2 className="font-display text-lg font-semibold text-paper">Customer payments and earnings</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {money.map((item) => (
             <Stat
               key={item.label}
               label={item.label}
-              value={item.earned ? formatEarnedKes(item.kes ?? 0) : formatMoney(item.value)}
-              subValue={item.earned ? undefined : formatKes(item.kes ?? 0)}
+              value={item.earned ? formatEarnedKes(item.kes ?? 0) : formatKes(item.kes ?? 0)}
+              subValue={item.earned ? undefined : `Wallet credit ${formatMoney(item.value)}`}
               hint={item.hint}
               tone="live"
             />
@@ -361,7 +365,7 @@ function DashboardPeriods({
       <section className="space-y-3" data-testid="admin-yesterday-shares">
         <h2 className="font-display text-lg font-semibold text-paper">Yesterday admin split</h2>
         <p className="text-sm text-mist">
-          {`Nairobi day ${yesterday}: sonshas and rulli each receive 50%.`}
+          {`Earnings for ${yesterday}, separate from the customer payments above. sonshas and rulli each receive 50%.`}
         </p>
         <AdminShareStrip
           split={yesterdaySplit}
@@ -388,11 +392,13 @@ function DailyDepositsPanel({
   rows,
   shownAmounts,
   shownKes,
+  earnedByDay,
   rate,
 }: {
   rows: DashboardDepositRow[]
   shownAmounts: Map<string, number>
   shownKes: Map<string, number>
+  earnedByDay: Record<string, number>
   rate: number
 }) {
   const today = nairobiDateKey(new Date().toISOString()) ?? '1970-01-01'
@@ -407,7 +413,7 @@ function DailyDepositsPanel({
       ),
     [rows, selectedDay, shownAmounts],
   )
-  const earnedUsd = useMemo(
+  const paymentUsd = useMemo(
     () =>
       Math.round(
         (dayRows.reduce((sum, row) => sum + (shownAmounts.get(row.id) ?? 0), 0) + Number.EPSILON) * 100,
@@ -418,7 +424,7 @@ function DailyDepositsPanel({
     () => dayRows.reduce((sum, row) => sum + (shownKes.get(row.id) ?? 0), 0),
     [dayRows, shownKes],
   )
-  const daySplit = useMemo(() => splitEqualPartners(earnedUsd), [earnedUsd])
+  const daySplit = useMemo(() => splitEqualPartners(earnedByDay[selectedDay] ?? 0), [earnedByDay, selectedDay])
 
   function applyDay(next: string) {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(next) ? next : today
@@ -431,7 +437,7 @@ function DailyDepositsPanel({
       <div className="space-y-1">
         <h2 className="font-display text-lg font-semibold text-paper">Daily deposits</h2>
         <p className="text-sm text-mist">
-          Pick any Nairobi calendar day to see money earned and each admin's share.
+          Customer payments for one Nairobi day. Earnings for that day are separate from the amounts customers paid.
         </p>
       </div>
 
@@ -477,10 +483,10 @@ function DailyDepositsPanel({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="admin-daily-deposits-stats">
         <Stat
-          label={`Money earned · ${formatDayLabel(selectedDay)}`}
-          value={formatMoney(earnedUsd)}
-          subValue={formatKes(earnedDayKes)}
-          hint="Completed payments credited that day"
+          label={`Customer payments · ${formatDayLabel(selectedDay)}`}
+          value={formatKes(earnedDayKes)}
+          subValue={formatMoney(paymentUsd)}
+          hint="M-Pesa paid that day. Not the wallet balance."
           tone="live"
         />
         <Stat
@@ -526,7 +532,7 @@ function DepositTable({
           <tr>
             <th className="px-3 py-2 font-semibold">Who paid</th>
             <th className="px-3 py-2 font-semibold">Payment</th>
-            <th className="px-3 py-2 font-semibold">Amount</th>
+            <th className="px-3 py-2 font-semibold">Customer payment</th>
             <th className="px-3 py-2 font-semibold">Status</th>
             <th className="px-3 py-2 font-semibold">Receipt</th>
             <th className="px-3 py-2 font-semibold">Credited</th>
@@ -542,8 +548,10 @@ function DepositTable({
                 <td className="px-3 py-2 text-paper">{payer(row)}</td>
                 <td className="px-3 py-2 text-paper">{row.payment || 'Deposit'}</td>
                 <td className="px-3 py-2 font-mono text-paper">
-                  <span className="block">{shown != null ? formatMoney(shown) : usdLine(row.amountUsd, row.amountKes, rate)}</span>
-                  {kes ? <span className="mt-0.5 block text-xs text-mist">{kes}</span> : null}
+                  <span className="block">{kes ?? '—'}</span>
+                  <span className="mt-0.5 block text-xs text-mist">
+                    {`Wallet credit ${shown != null ? formatMoney(shown) : usdLine(row.amountUsd, row.amountKes, rate)}`}
+                  </span>
                 </td>
                 <td className="px-3 py-2">
                   <Badge tone={statusTone(row.status)}>{row.status}</Badge>

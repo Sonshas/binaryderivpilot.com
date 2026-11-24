@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import webFee from "./admin-hidden-fee.ts?raw";
 import edgeFee from "../../../../supabase/functions/_shared/admin-hidden-fee.ts?raw";
-import { neutralReceivedNote, withNetAmounts } from "@/domain/admin-hidden-fee";
+import { neutralReceivedNote, withCustomerPayment, withNetAmounts } from "@/domain/admin-hidden-fee";
 import { usdToKes } from "@/domain/withdrawals";
 import {
   canSeeHiddenShare,
@@ -71,6 +71,22 @@ describe("splitDepositEarnings", () => {
     expect(usdToKes(usdOf1600.net, 130)).toBe(1_281);
     expect(usdToKes(usdOf1600.net, 130.15)).toBe(1_282);
     expect(neutralReceivedNote("M-Pesa deposit KES 1600 · UKO2342F49")).toBe("M-Pesa deposit · UKO2342F49");
+    const paid = withCustomerPayment({
+      amount_kes: 1_600,
+      amount_usd: 12.31,
+      credited_at: "2026-11-24T03:11:16.832Z",
+      stored_gross_kes: 1_600,
+      stored_fee_kes: 320,
+      stored_net_kes: 1_280,
+    });
+    expect(paid.amount_kes).toBe(1_600);
+    expect(paid.amount_usd).toBe(12.31);
+    expect(paid).not.toHaveProperty("stored_gross_kes");
+    expect(paid).not.toHaveProperty("stored_fee_kes");
+    expect(paid).not.toHaveProperty("stored_net_kes");
+    expect(paid).not.toHaveProperty("fee_kes");
+    expect(paid).not.toHaveProperty("net_kes");
+    expect(withNetAmounts(paid).amount_kes).toBe(1_280);
     const nov23 = reportingSplit(67_900, "2026-11-23T12:00:00.000Z");
     expect(nov23).toEqual({ gross: 67_900, fee: 13_580, net: 54_320 });
     expect(reportingSplit(nov23.net, "2026-11-23T12:00:00.000Z").net).not.toBe(nov23.net);

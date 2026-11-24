@@ -130,6 +130,19 @@ export function withNetAmounts<T extends SplitMoneyRow>(row: T): T {
   };
 }
 
+/**
+ * Regular-admin payment row. Amounts are the customer M-Pesa KES and the USD
+ * credited to the wallet. Fee and net columns are not included.
+ */
+export function withCustomerPayment<T extends SplitMoneyRow>(row: T): T {
+  const kes = kesReportingSplit(row);
+  return {
+    ...withoutStored(row),
+    amount_kes: kes == null ? row.amount_kes : kes.gross,
+    amount_usd: row.amount_usd,
+  };
+}
+
 export interface AnnotatedSplitRow extends SplitMoneyRow {
   gross_kes: number | null;
   fee_kes: number | null;

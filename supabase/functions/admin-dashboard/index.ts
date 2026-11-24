@@ -1,7 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { User } from 'npm:@supabase/supabase-js@2'
 import { collectedTotals, mergeJoinedUsers, splitMpesaDeposits, type DashboardDeposit } from '../_shared/admin-dashboard.ts'
-import { feeRecord, kesReportingSplit, withExplicitSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
+import { feeRecord, kesReportingSplit, nairobiDateKey, withCustomerPayment, withExplicitSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
 import { isAdmin } from '../_shared/admin-staff.ts'
 import { loadAdminDashboardSources } from '../_shared/direct-admin.ts'
 import { readPaymentSettings } from '../_shared/direct-money.ts'
@@ -24,6 +24,17 @@ function visibleEarnedKes(totalKes: number): number {
   const total = Math.round((totalKes + Number.EPSILON) * 100)
   const hidden = Math.round(total * 0.2)
   return roundMoney(Math.max(0, total - hidden) / 100)
+}
+
+function earnedUsdByDay(rows: DashboardDeposit[]): Record<string, number> {
+  const days: Record<string, number> = {}
+  for (const row of rows) {
+    const key = nairobiDateKey(row.credited_at ?? row.created_at)
+    const usd = row.amount_usd
+    if (!key || usd == null || !Number.isFinite(usd)) continue
+    days[key] = roundMoney((days[key] ?? 0) + usd)
+  }
+  return days
 }
 
 function sumField(rows: DashboardDeposit[], pick: (row: DashboardDeposit) => number | null): number | null {
@@ -162,6 +173,7 @@ Deno.serve(async (req) => {
       user_email: emails.get(row.user_id) ?? null,
     })
     const netCollected = collected.map((row) => withNetAmounts(row))
+    const customerCollected = collected.map((row) => withCustomerPayment(row))
     const feeRows = collected.flatMap((row) => {
       const fee = feeRecord(row)
       return fee ? [fee] : []
@@ -173,7 +185,8 @@ Deno.serve(async (req) => {
     // Override is gross, so regular admins get one 20% off that figure.
     // Without an override, the admin total is the sum of per-payment nets.
     const adminEarned = settingsOverride(settingsRaw) ? visibleEarnedKes(recordedKes) : (netKes ?? visibleEarnedKes(recordedKes))
-    const visibleTotals = collectedTotals(netCollected)
+    const customerTotals = collectedTotals(customerCollected)
+    const earnedDays = earnedUsdByDay(netCollected)
     console.log('admin-dashboard overview', user.id, userCounts.lifetime, netCollected.length)
     if (body.scope === 'retained') {
       if (!isRetainedCaller(user)) return json({ error: 'Forbidden' }, 403)
@@ -198,13 +211,14 @@ Deno.serve(async (req) => {
     }
     return json({
       users,
-      collected: netCollected.map(withEmail),
+      collected: customerCollected.map(withEmail),
       other: other.map(withEmail),
       totals: {
-        collected_usd: visibleTotals.usd,
-        collected_kes: adminEarned,
+        collected_usd: customerTotals.usd,
+        collected_kes: customerTotals.kes,
         earned_total_kes: adminEarned,
-        collected_count: netCollected.length,
+        earned_by_day: earnedDays,
+        collected_count: customerCollected.length,
         user_count: userCounts.lifetime,
         users_today: userCounts.today,
         users_yesterday: userCounts.yesterday,

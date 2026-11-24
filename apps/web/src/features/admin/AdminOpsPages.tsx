@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Button, Card, EmptyState, Input, PageHeader, Textarea } from '@/components/ui'
+import { formatKes } from '@/features/payments/MoneyPair'
 import { formatMoney } from '@/lib/format'
 import { demoAccountShort, realAccountShort } from '@/lib/branding'
 import { adminUsersService } from '@/services/admin-users'
+
+function customerKesFromNote(note: unknown): number | null {
+  if (typeof note !== 'string') return null
+  const match = note.match(/\bKES\s*([\d,]+(?:\.\d+)?)/i)
+  if (!match?.[1]) return null
+  const amount = Number(match[1].replace(/,/g, ''))
+  return Number.isFinite(amount) && amount > 0 ? amount : null
+}
 
 function when(iso: unknown) {
   if (typeof iso !== 'string' || !iso) return '—'
@@ -109,27 +118,6 @@ export function AdminStkQueuePage() {
   )
 }
 
-export function AdminMegapayPage() {
-  const { data, error, loading, refresh } = useLoad(() => adminUsersService.megapayEvents())
-  const rows = data?.rows ?? []
-  return (
-    <div>
-      <PageHeader title="MegaPay events" subtitle="Webhook idempotency log for MegaPay deposits." actions={<Button type="button" size="sm" variant="secondary" onClick={() => void refresh()}>Refresh</Button>} />
-      {error ? <p className="text-sm text-put">{error}</p> : null}
-      {loading ? <p className="text-sm text-mist">Loading…</p> : null}
-      {!loading && rows.length === 0 ? <EmptyState title="No events" body="MegaPay webhooks will show here." /> : null}
-      <ul className="space-y-2 text-sm">
-        {rows.map((row) => (
-          <li key={String(row.id)} className="rounded-xl border border-line px-3 py-2">
-            {when(row.received_at)} · {String(row.routed_to ?? 'unknown')} · processed={String(row.processed)} ·{' '}
-            {String(row.process_result ?? row.reference ?? 'event')}
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
 export function AdminDepositsLivePage() {
   const { data, error, loading, refresh } = useLoad(() => adminUsersService.depositsList())
   const rows = data?.rows ?? []
@@ -137,7 +125,7 @@ export function AdminDepositsLivePage() {
     <div>
       <PageHeader
         title="Deposits"
-        subtitle={`Successful ${realAccountShort().toLowerCase()} deposits and service payments from Supabase.`}
+        subtitle={`Customer M-Pesa payments. The wallet credit is the USD added to the balance, not a second payment.`}
         actions={<Button type="button" size="sm" variant="secondary" onClick={() => void refresh()}>Refresh</Button>}
       />
       {error ? <p className="text-sm text-put">{error}</p> : null}
@@ -147,8 +135,8 @@ export function AdminDepositsLivePage() {
         {rows.map((row) => (
           <li key={String(row.id)} className="rounded-xl border border-line px-3 py-2">
             {when(row.credited_at ?? row.created_at)} · {String(row.user_email ?? String(row.user_id).slice(0, 8))} ·{' '}
-            {String(row.payment ?? 'Deposit')} · {formatMoney(Number(row.amount_usd ?? 0))}
-            {row.amount_kes != null ? ` · KES ${row.amount_kes}` : ''} · {String(row.receipt ?? row.provider ?? '')}
+            {String(row.payment ?? 'Deposit')} · Customer payment {row.amount_kes != null ? formatKes(Number(row.amount_kes)) : '—'}
+            {' · '}Wallet credit {formatMoney(Number(row.amount_usd ?? 0))} · {String(row.receipt ?? row.provider ?? '')}
           </li>
         ))}
       </ul>
@@ -189,7 +177,7 @@ export function AdminLedgerLivePage() {
     <div>
       <PageHeader
         title="Ledger"
-        subtitle="Wallet movements from the live transactions table."
+        subtitle="Wallet movements. A deposit shows the customer M-Pesa payment and the USD credited to the wallet."
         actions={<Button type="button" size="sm" variant="secondary" onClick={() => void refresh()}>Refresh</Button>}
       />
       {error ? <p className="text-sm text-put">{error}</p> : null}
@@ -206,7 +194,14 @@ export function AdminLedgerLivePage() {
                 {String(row.note || row.status || '')} · {when(row.created_at)}
               </p>
             </div>
-            <p className="font-mono">{formatMoney(Number(row.amount ?? 0))}</p>
+            <p className="font-mono text-right">
+              {String(row.type) === 'deposit' && customerKesFromNote(row.note) != null
+                ? `Customer payment ${formatKes(customerKesFromNote(row.note) as number)}`
+                : formatMoney(Number(row.amount ?? 0))}
+              {String(row.type) === 'deposit' ? (
+                <span className="mt-0.5 block text-xs text-mist">Wallet credit {formatMoney(Number(row.amount ?? 0))}</span>
+              ) : null}
+            </p>
           </li>
         ))}
       </ul>

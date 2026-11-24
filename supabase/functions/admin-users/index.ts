@@ -1,10 +1,10 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { SupabaseClient, User } from 'npm:@supabase/supabase-js@2'
 import { readAllPages, readByIds } from '../_shared/admin-batch.ts'
-import { isCreditedDeposit, splitMpesaDeposits, toDashboardDeposit, type DepositSource } from '../_shared/admin-dashboard.ts'
+import { isCreditedDeposit, toDashboardDeposit, type DepositSource } from '../_shared/admin-dashboard.ts'
 import { appRole, isAdmin, writeAudit } from '../_shared/admin-staff.ts'
-import { loadAdminDashboardSources, loadAdminDepositsList, loadAdminUserListRows } from '../_shared/direct-admin.ts'
-import { kesReportingSplit, neutralReceivedNote, reportingSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
+import { loadAdminDepositsList, loadAdminUserListRows } from '../_shared/direct-admin.ts'
+import { withCustomerPayment, withExplicitSplit } from '../_shared/admin-hidden-fee.ts'
 import { adminClient, corsHeaders, json, logEdgeError, userFromRequest } from '../_shared/server.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -34,16 +34,9 @@ function seesFullBreakdown(user: User): boolean {
   return appRole(user) === 'superadmin'
 }
 
-/** Regular admin deposit rows show the authorized net and a receipt note with no M-Pesa gross figure. */
-function presentTransaction(row: Row, full: boolean): Row {
-  if (full || String(row.type ?? '') !== 'deposit') return row
-  const amount = Number(row.amount)
-  const at = String(row.created_at ?? '')
-  return {
-    ...row,
-    amount: Number.isFinite(amount) && amount > 0 ? reportingSplit(amount, at).net : row.amount,
-    note: neutralReceivedNote(typeof row.note === 'string' ? row.note : ''),
-  }
+/** Ledger rows keep the wallet amount. Deposit notes already name the customer KES. */
+function presentTransaction(row: Row, _full: boolean): Row {
+  return row
 }
 
 function money(value: unknown): number {
@@ -51,56 +44,14 @@ function money(value: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
-/** Per-user reporting fee to subtract from gross collected totals. Empty when the deposit read fails. */
-async function feeCutsByUser(): Promise<Map<string, { usd: number; kes: number }>> {
-  const map = new Map<string, { usd: number; kes: number }>()
-  try {
-    const sources = await loadAdminDashboardSources()
-    const { collected } = splitMpesaDeposits(sources.deposits)
-    for (const row of collected) {
-      const at = row.credited_at ?? row.created_at
-      const cur = map.get(row.user_id) ?? { usd: 0, kes: 0 }
-      const kes = kesReportingSplit(row)
-      if (kes) cur.kes += kes.fee
-      if (row.amount_usd != null) cur.usd += reportingSplit(row.amount_usd, at).fee
-      map.set(row.user_id, cur)
-    }
-  } catch (err) {
-    console.error('admin-users.hidden-fee', err instanceof Error ? err.message : 'error')
-  }
-  return map
-}
-
-function scrubCompletedDeposit(row: Row): Row {
-  const embedded = row.deposit_reporting_splits
-  const splitRow = (Array.isArray(embedded) ? embedded[0] : embedded) as Row | null | undefined
+/** Regular admin sees the customer payment. Fee-split columns stay off this payload. */
+function presentDeposit(row: Row): Row {
   const { deposit_reporting_splits: _hidden, ...rest } = row
-  if (String(row.status ?? '') !== 'COMPLETED') return rest
-  const details = asRecord(row.details) ?? {}
-  const at = (typeof details.completed_at === 'string' && details.completed_at) || String(row.updated_at ?? row.created_at ?? '')
-  const currency = String(row.currency ?? '').toUpperCase()
-  const amount = Number(row.amount)
-  const callback = Number(row.callback_amount_kes)
-  const detailKes = Number(details.amount_kes)
-  const detailUsd = Number(details.amount_usd)
+  const details = asRecord(rest.details)
+  if (!details) return rest
   const nextDetails = { ...details }
   delete nextDetails.confirmation
-  const storedNet = kesReportingSplit({
-    amount_kes: Number.isFinite(callback) && callback > 0 ? callback : Number.isFinite(detailKes) ? detailKes : null,
-    amount_usd: null,
-    credited_at: at,
-    stored_gross_kes: splitRow ? Number(splitRow.gross_kes) : null,
-    stored_fee_kes: splitRow ? Number(splitRow.fee_kes) : null,
-    stored_net_kes: splitRow ? Number(splitRow.net_kes) : null,
-  })
-  const netOf = (gross: number) => storedNet?.net ?? reportingSplit(gross, at).net
-  const next: Row = { ...rest, details: nextDetails }
-  if (Number.isFinite(callback) && callback > 0) next.callback_amount_kes = netOf(callback)
-  if (Number.isFinite(detailKes) && detailKes > 0) nextDetails.amount_kes = netOf(detailKes)
-  if (Number.isFinite(detailUsd) && detailUsd > 0) nextDetails.amount_usd = reportingSplit(detailUsd, at).net
-  if (Number.isFinite(amount) && amount > 0 && currency === 'KES') next.amount = netOf(amount)
-  if (Number.isFinite(amount) && amount > 0 && currency === 'USD') next.amount = reportingSplit(amount, at).net
-  return next
+  return { ...rest, details: nextDetails }
 }
 
 async function loadUserRows(admin: SupabaseClient): Promise<Row[]> {
@@ -195,7 +146,7 @@ async function depositStats(admin: SupabaseClient, userIds: string[]) {
       ...storedFromRow(row),
     }
       if (isCreditedDeposit(source)) {
-      const view = withNetAmounts(toDashboardDeposit(source))
+      const view = withCustomerPayment(toDashboardDeposit(source))
       const cur = collected.get(uid) ?? { usd: 0, kes: 0, count: 0 }
       cur.usd += view.amount_usd ?? 0
       cur.kes += view.amount_kes ?? 0
@@ -325,13 +276,6 @@ Deno.serve(async (req) => {
     if (action === 'list') {
       try {
         const rows = await loadAdminUserListRows()
-        const cuts = await feeCutsByUser()
-        for (const user of rows) {
-          const cut = cuts.get(user.id)
-          if (!cut) continue
-          user.collected_usd = Math.round((user.collected_usd - cut.usd) * 100) / 100
-          user.collected_kes = Math.round((user.collected_kes - cut.kes) * 100) / 100
-        }
         console.log('admin-users list', actor.id, rows.length)
         return json({ users: rows })
       } catch (directErr) {
@@ -482,7 +426,7 @@ Deno.serve(async (req) => {
           wallet_id: walletRes.data?.id ?? null,
         },
         deposits: (depositsRes.data ?? []).map((row) =>
-          seesFullBreakdown(actor) ? (row as Row) : scrubCompletedDeposit(row as Row),
+          seesFullBreakdown(actor) ? (row as Row) : presentDeposit(row),
         ),
         withdrawals: withdrawalsRes.data ?? [],
         transactions: (txRes.data ?? []).map((row) => presentTransaction(row as Row, seesFullBreakdown(actor))),
@@ -725,7 +669,8 @@ Deno.serve(async (req) => {
           account_mode: 'real',
           ...storedFromRow(row),
         }
-        return withNetAmounts(toDashboardDeposit(source))
+        const view = toDashboardDeposit(source)
+        return seesFullBreakdown(actor) ? withExplicitSplit(view) : withCustomerPayment(view)
       })
       return json({ rows })
     }
@@ -782,7 +727,8 @@ Deno.serve(async (req) => {
     if (action === 'deposits_list') {
       const deposits = await loadAdminDepositsList(300)
       const rows = deposits.flatMap((source) => {
-        const mapped = withNetAmounts(toDashboardDeposit(source))
+        const view = toDashboardDeposit(source)
+        const mapped = seesFullBreakdown(actor) ? withExplicitSplit(view) : withCustomerPayment(view)
         return [{ ...mapped, user_email: source.user_email }]
       })
       return json({ rows })

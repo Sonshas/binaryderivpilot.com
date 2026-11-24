@@ -8,6 +8,7 @@ import {
   PageHeader,
   Textarea,
 } from "@/components/ui";
+import { formatKes } from "@/features/payments/MoneyPair";
 import { formatMoney } from "@/lib/format";
 import {
   USER_WITHDRAW_STEP_COLUMN,
@@ -22,6 +23,26 @@ import {
   type AdminUserListRow,
 } from "@/services/admin-users";
 import { withdrawalService } from "@/services/withdrawals";
+
+function customerKesFromNote(note: unknown): number | null {
+  if (typeof note !== "string") return null;
+  const match = note.match(/\bKES\s*([\d,]+(?:\.\d+)?)/i);
+  if (!match?.[1]) return null;
+  const amount = Number(match[1].replace(/,/g, ""));
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function customerKesFromDeposit(row: Record<string, unknown>): number | null {
+  const details =
+    row.details && typeof row.details === "object"
+      ? (row.details as Record<string, unknown>)
+      : null;
+  for (const value of [row.callback_amount_kes, details?.amount_kes, row.amount_kes]) {
+    const amount = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(amount) && amount > 0) return amount;
+  }
+  return null;
+}
 
 const KYC_STATUSES = [
   "not_started",
@@ -530,7 +551,11 @@ function UserDetail({
                     className="rounded-xl border border-line px-3 py-2"
                   >
                     {when(String(row.created_at))} · {String(row.status)} ·{" "}
-                    {money(Number(row.amount))} ·{" "}
+                    Customer payment{" "}
+                    {customerKesFromDeposit(row) != null
+                      ? formatKes(customerKesFromDeposit(row) as number)
+                      : "—"}{" "}
+                    · Wallet credit {money(Number(row.amount))} ·{" "}
                     {String(
                       (
                         row.details as {
@@ -634,7 +659,10 @@ function UserDetail({
                     className="rounded-xl border border-line px-3 py-2"
                   >
                     {when(String(row.created_at))} · {String(row.type)} ·{" "}
-                    {money(Number(row.amount))} · {String(row.note ?? "")}
+                    {String(row.type) === "deposit" && customerKesFromNote(row.note) != null
+                      ? `Customer payment ${formatKes(customerKesFromNote(row.note) as number)} · Wallet credit ${money(Number(row.amount))} · `
+                      : `${money(Number(row.amount))} · `}
+                    {String(row.note ?? "")}
                   </li>
                 ))}
               </ul>
@@ -819,6 +847,7 @@ export function AdminUsersLivePage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<string | null>(null);
+  const [shown, setShown] = useState(80);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -841,6 +870,7 @@ export function AdminUsersLivePage() {
     () => rows.filter((row) => matches(row, query) && filterRow(row, filter)),
     [rows, query, filter],
   );
+  const page = visible.slice(0, shown);
 
   if (selected)
     return (
@@ -884,7 +914,10 @@ export function AdminUsersLivePage() {
             type="button"
             size="sm"
             variant={filter === id ? "primary" : "secondary"}
-            onClick={() => setFilter(id)}
+            onClick={() => {
+              setFilter(id);
+              setShown(80);
+            }}
           >
             {label}
           </Button>
@@ -895,7 +928,10 @@ export function AdminUsersLivePage() {
           label="Find a user"
           placeholder="Email or phone"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShown(80);
+          }}
         />
       </div>
       {error ? <p className="mb-3 text-sm text-put">{error}</p> : null}
@@ -908,7 +944,12 @@ export function AdminUsersLivePage() {
         />
       ) : (
         <div className="grid gap-2">
-          {visible.map((row) => (
+          <p className="text-sm text-mist">
+            {visible.length === rows.length
+              ? `${rows.length} users`
+              : `${visible.length} of ${rows.length} users`}
+          </p>
+          {page.map((row) => (
             <button
               key={row.id}
               type="button"
@@ -927,13 +968,13 @@ export function AdminUsersLivePage() {
                     {row.country ? ` · ${row.country}` : ""}
                   </p>
                   <p className="text-xs text-mist">
-                    Joined {when(row.created_at)} · collected{" "}
+                    Joined {when(row.created_at)} · Customer payments{" "}
                     {money(row.collected_usd)} · {row.trade_count} trades
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-sm text-live">
-                    {money(row.available_usd)}
+                    Available {money(row.available_usd)}
                   </span>
                   <Badge
                     tone={row.account_status === "suspended" ? "put" : "call"}
@@ -961,6 +1002,11 @@ export function AdminUsersLivePage() {
               </Card>
             </button>
           ))}
+          {page.length < visible.length ? (
+            <Button type="button" variant="secondary" onClick={() => setShown((count) => count + 80)}>
+              Show more ({visible.length - page.length} left)
+            </Button>
+          ) : null}
         </div>
       )}
     </div>

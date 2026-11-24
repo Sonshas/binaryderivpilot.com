@@ -38,6 +38,8 @@ export interface AdminDashboard {
     collectedKes: number | null
     collectedCount: number
     earnedTotalKes: number | null
+    /** Net earnings USD by Nairobi day. Not a customer-payment total. */
+    earnedByDay: Record<string, number>
     userCount: number
     usersToday: number
     usersYesterday: number
@@ -94,6 +96,16 @@ function mapList(value: unknown, map: (raw: Record<string, unknown>) => Dashboar
   })
 }
 
+function mapEarnedDays(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const days: Record<string, number> = {}
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    const amount = money(raw)
+    if (amount != null) days[key] = amount
+  }
+  return days
+}
+
 function mapDashboard(data: Record<string, unknown>): AdminDashboard {
   const totals = data.totals && typeof data.totals === 'object' ? (data.totals as Record<string, unknown>) : {}
   const users = Array.isArray(data.users)
@@ -113,6 +125,7 @@ function mapDashboard(data: Record<string, unknown>): AdminDashboard {
       collectedKes: money(totals.collected_kes),
       collectedCount: Number(totals.collected_count ?? 0) || 0,
       earnedTotalKes: money(totals.earned_total_kes) ?? money(totals.collected_kes),
+      earnedByDay: mapEarnedDays(totals.earned_by_day),
       userCount: Number(totals.user_count),
       usersToday: Number(totals.users_today),
       usersYesterday: Number(totals.users_yesterday),
