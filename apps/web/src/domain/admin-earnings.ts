@@ -305,6 +305,27 @@ export function formatEarnedKes(amount: number): string {
 }
 
 /** Pure 50/50 of a pool with no further 20% carve (Rulli view of the money he is allowed to see). */
+/** 50/50 of a retained KES pool. The pool is already the admin net, so this does not take another 20%. */
+export function earningsSplitFromRetainedKes(retainedKes: number): DepositEarningsSplit {
+  const split = splitAdminVisibleKes(retainedKes);
+  return {
+    totalUsd: split.sharedKes,
+    sharedUsd: split.sharedKes,
+    shares: split.shares.map((share) => ({
+      key: share.key,
+      name: share.name,
+      email: share.email,
+      shareRate: share.shareRate,
+      grossUsd: share.grossKes,
+      chargeUsd: share.chargeKes,
+      netUsd: share.netKes,
+    })),
+    hiddenUsd: 0,
+    sonshasTotalUsd: split.shares[0]?.grossKes ?? 0,
+    receiverChargeUsd: split.receiverChargeKes,
+  };
+}
+
 export function splitEqualPartners(totalUsd: number): DepositEarningsSplit {
   const total = toCents(totalUsd);
   const sonshasVisible = Math.round(total * PARTNER_SHARE_OF_REMAINDER);

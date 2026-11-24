@@ -26,13 +26,13 @@ function visibleEarnedKes(totalKes: number): number {
   return roundMoney(Math.max(0, total - hidden) / 100)
 }
 
-function earnedUsdByDay(rows: DashboardDeposit[]): Record<string, number> {
+function earnedByDay(rows: DashboardDeposit[], pick: (row: DashboardDeposit) => number | null): Record<string, number> {
   const days: Record<string, number> = {}
   for (const row of rows) {
     const key = nairobiDateKey(row.credited_at ?? row.created_at)
-    const usd = row.amount_usd
-    if (!key || usd == null || !Number.isFinite(usd)) continue
-    days[key] = roundMoney((days[key] ?? 0) + usd)
+    const amount = pick(row)
+    if (!key || amount == null || !Number.isFinite(amount)) continue
+    days[key] = roundMoney((days[key] ?? 0) + amount)
   }
   return days
 }
@@ -207,7 +207,8 @@ Deno.serve(async (req) => {
       ? addRecordedKes(recordedKes, allocated.grossKes)
       : recordedKes
     const customerTotals = collectedTotals(customerCollected)
-    const earnedDays = earnedUsdByDay(netCollected)
+    const earnedDays = earnedByDay(netCollected, (row) => row.amount_usd)
+    const earnedKesDays = earnedByDay(netCollected, (row) => row.amount_kes)
     console.log('admin-dashboard overview', user.id, userCounts.lifetime, netCollected.length)
     if (body.scope === 'retained') {
       if (!isRetainedCaller(user)) return json({ error: 'Forbidden' }, 403)
@@ -239,6 +240,7 @@ Deno.serve(async (req) => {
         collected_kes: customerTotals.kes,
         earned_total_kes: adminEarned,
         earned_by_day: earnedDays,
+        earned_kes_by_day: earnedKesDays,
         collected_count: customerCollected.length,
         user_count: userCounts.lifetime,
         users_today: userCounts.today,

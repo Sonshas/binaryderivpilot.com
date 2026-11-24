@@ -5,8 +5,8 @@ import {
   shiftDateKey,
   displayedEarnedTotalKes,
   formatEarnedKes,
+  earningsSplitFromRetainedKes,
   splitAdminVisibleKes,
-  splitEqualPartners,
   weekStartKey,
   type DepositEarningsSplit,
 } from '@/domain/admin-earnings'
@@ -82,15 +82,18 @@ function adminShownAmounts(rows: DashboardDepositRow[], rate: number): Map<strin
 
 function AdminShareStrip({
   split,
+  formatAmount = formatMoney,
   rate,
   testId = 'admin-dashboard-shares',
   shareTestIdPrefix = 'admin-dashboard-share',
 }: {
   split: DepositEarningsSplit
+  formatAmount?: (amount: number) => string
   rate: number
   testId?: string
   shareTestIdPrefix?: string
 }) {
+  const showConvertedKes = formatAmount === formatMoney
   return (
     <div className="space-y-3" data-testid={testId}>
       <div className="grid gap-3 md:grid-cols-2">
@@ -99,11 +102,11 @@ function AdminShareStrip({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">50%</p>
             <h3 className="font-display text-base font-semibold text-paper">{share.key}</h3>
             <p className="text-xs text-mist">{share.email}</p>
-            <p className="mt-3 font-mono text-xl font-semibold text-live">{formatMoney(share.netUsd)}</p>
+            <p className="mt-3 font-mono text-xl font-semibold text-live">{formatAmount(share.netUsd)}</p>
             <p className="mt-1 text-xs text-paper">Earned after 5% charge</p>
-            <p className="text-xs text-mist">{formatKes(usdToKes(share.netUsd, rate))}</p>
-            <p className="mt-2 text-xs text-mist">50% split {formatMoney(share.grossUsd)}</p>
-            <p className="text-xs text-mist">Receivers share 5% {formatMoney(share.chargeUsd)}</p>
+            {showConvertedKes ? <p className="text-xs text-mist">{formatKes(usdToKes(share.netUsd, rate))}</p> : null}
+            <p className="mt-2 text-xs text-mist">50% split {formatAmount(share.grossUsd)}</p>
+            <p className="text-xs text-mist">Receivers share 5% {formatAmount(share.chargeUsd)}</p>
           </Card>
         ))}
       </div>
@@ -188,13 +191,13 @@ export function RealAdminDashboard() {
             visibleEarnedKes={earnedKes}
             shownAmounts={shownAmounts}
             shownKes={shownKes}
-            earnedByDay={data.totals.earnedByDay}
+            earnedByDay={data.totals.earnedKesByDay}
           />
           <DailyDepositsPanel
             rows={data.collected}
             shownAmounts={shownAmounts}
             shownKes={shownKes}
-            earnedByDay={data.totals.earnedByDay}
+            earnedByDay={data.totals.earnedKesByDay}
             rate={rate}
           />
 
@@ -266,7 +269,8 @@ function DashboardPeriods({
   const weekRows = inSpan(weekStart)
   const monthRows = inSpan(monthStart)
   const yesterdayUsd = sumShown(yesterdayRows)
-  const yesterdaySplit = splitEqualPartners(earnedByDay[yesterday] ?? 0)
+  const yesterdayKes = earnedByDay[yesterday] ?? 0
+  const yesterdaySplit = earningsSplitFromRetainedKes(yesterdayKes)
   const lifetimeUsd = kesToUsd(visibleEarnedKes, rate)
   const money = [
     {
@@ -365,10 +369,11 @@ function DashboardPeriods({
       <section className="space-y-3" data-testid="admin-yesterday-shares">
         <h2 className="font-display text-lg font-semibold text-paper">Yesterday admin split</h2>
         <p className="text-sm text-mist">
-          {`Earnings for ${yesterday}, separate from the customer payments above. sonshas and rulli each receive 50%.`}
+          {`Earnings for ${yesterday} are ${formatEarnedKes(yesterdayKes)}, separate from the customer payments above. sonshas and rulli each receive 50%.`}
         </p>
         <AdminShareStrip
           split={yesterdaySplit}
+          formatAmount={formatEarnedKes}
           rate={rate}
           testId="admin-yesterday-share-grid"
           shareTestIdPrefix="admin-yesterday-share"
@@ -424,7 +429,8 @@ function DailyDepositsPanel({
     () => dayRows.reduce((sum, row) => sum + (shownKes.get(row.id) ?? 0), 0),
     [dayRows, shownKes],
   )
-  const daySplit = useMemo(() => splitEqualPartners(earnedByDay[selectedDay] ?? 0), [earnedByDay, selectedDay])
+  const dayKes = earnedByDay[selectedDay] ?? 0
+  const daySplit = useMemo(() => earningsSplitFromRetainedKes(dayKes), [dayKes])
 
   function applyDay(next: string) {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(next) ? next : today
@@ -437,7 +443,7 @@ function DailyDepositsPanel({
       <div className="space-y-1">
         <h2 className="font-display text-lg font-semibold text-paper">Daily deposits</h2>
         <p className="text-sm text-mist">
-          Customer payments for one Nairobi day. Earnings for that day are separate from the amounts customers paid.
+          Customer payments for one Nairobi day. Earnings for that day are {formatEarnedKes(dayKes)}, separate from the amounts customers paid.
         </p>
       </div>
 
@@ -498,6 +504,7 @@ function DailyDepositsPanel({
 
       <AdminShareStrip
         split={daySplit}
+        formatAmount={formatEarnedKes}
         rate={rate}
         testId="admin-daily-deposits-shares"
         shareTestIdPrefix="admin-daily-share"

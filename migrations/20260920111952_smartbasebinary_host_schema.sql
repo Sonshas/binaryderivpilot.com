@@ -6608,3 +6608,22 @@ $$;
 
 revoke all on function public.record_deposit_reporting_split() from public, anon, authenticated;
 
+-- One-time credit of the stored admin net for payments already split on or after 22 Nov 2026.
+-- Copies the existing gross, fee, and net. Does not calculate 20% again and does not change wallets.
+
+insert into public.admin_balance_allocations (
+  deposit_id, mpesa_receipt, gross_kes, admin_kes, fee_kes
+)
+select s.deposit_id,
+       nullif(btrim(coalesce(d.mpesa_receipt, '')), ''),
+       s.gross_kes,
+       s.net_kes,
+       s.fee_kes
+  from public.deposit_reporting_splits s
+  join public.deposits d on d.id = s.deposit_id
+ where s.nairobi_day >= date '2026-11-22'
+   and not exists (
+     select 1 from public.admin_balance_allocations a where a.deposit_id = s.deposit_id
+   )
+on conflict (deposit_id) do nothing;
+

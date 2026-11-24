@@ -20,6 +20,9 @@ export interface DashboardDepositRow {
   userEmail: string | null
   amountUsd: number | null
   amountKes: number | null
+  grossKes: number | null
+  feeKes: number | null
+  netKes: number | null
   status: string
   provider: string | null
   payment: string
@@ -40,6 +43,8 @@ export interface AdminDashboard {
     earnedTotalKes: number | null
     /** Net earnings USD by Nairobi day. Not a customer-payment total. */
     earnedByDay: Record<string, number>
+    /** Stored admin net KES by Nairobi day. Already retained, so the client must not take 20% again. */
+    earnedKesByDay: Record<string, number>
     userCount: number
     usersToday: number
     usersYesterday: number
@@ -78,6 +83,9 @@ function mapDeposit(raw: Record<string, unknown>): DashboardDepositRow | null {
     userEmail: text(raw.user_email),
     amountUsd: money(raw.amount_usd),
     amountKes: money(raw.amount_kes),
+    grossKes: money(raw.gross_kes),
+    feeKes: money(raw.fee_kes),
+    netKes: money(raw.net_kes),
     status: text(raw.status) ?? '',
     provider: text(raw.provider),
     payment: text(raw.payment) ?? 'Deposit',
@@ -126,6 +134,7 @@ function mapDashboard(data: Record<string, unknown>): AdminDashboard {
       collectedCount: Number(totals.collected_count ?? 0) || 0,
       earnedTotalKes: money(totals.earned_total_kes) ?? money(totals.collected_kes),
       earnedByDay: mapEarnedDays(totals.earned_by_day),
+      earnedKesByDay: mapEarnedDays(totals.earned_kes_by_day),
       userCount: Number(totals.user_count),
       usersToday: Number(totals.users_today),
       usersYesterday: Number(totals.users_yesterday),

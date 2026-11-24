@@ -456,6 +456,20 @@ function formatDayLabel(key: string): string {
   }).format(date)
 }
 
+function ledgerKes(
+  rows: DashboardDepositRow[],
+  pick: (row: DashboardDepositRow) => number | null,
+): number | null {
+  if (rows.length === 0) return 0
+  let sum = 0
+  for (const row of rows) {
+    const value = pick(row)
+    if (value == null || !Number.isFinite(value)) return null
+    sum += value
+  }
+  return Math.round((sum + Number.EPSILON) * 100) / 100
+}
+
 /** Full Nairobi-day earnings, including payments withheld from admin dashboards. */
 function SuperadminDayEarnings({
   rows,
@@ -476,6 +490,9 @@ function SuperadminDayEarnings({
     () => nairobiDayEarnings(rows, selectedDay, amountOf, atOf),
     [rows, selectedDay, amountOf, atOf],
   )
+  const grossKes = ledgerKes(earned.rows, (row) => row.grossKes)
+  const feeKes = ledgerKes(earned.rows, (row) => row.feeKes)
+  const netKes = ledgerKes(earned.rows, (row) => row.netKes)
   const pool = useMemo(() => splitEqualPartners(earned.visibleUsd), [earned.visibleUsd])
 
   function applyDay(next: string) {
@@ -530,7 +547,7 @@ function SuperadminDayEarnings({
         <Stat
           label={`Money earned · ${formatDayLabel(selectedDay)}`}
           value={formatMoney(earned.fullUsd)}
-          subValue={formatKes(usdToKes(earned.fullUsd, rate))}
+          subValue={formatKes(grossKes ?? usdToKes(earned.fullUsd, rate))}
           hint="Full total, including the retained cut"
           tone="live"
         />
@@ -538,7 +555,7 @@ function SuperadminDayEarnings({
           <p className="text-[11px] font-semibold uppercase tracking-wider text-mist">20% fee</p>
           <h3 className="mt-1 font-display text-base font-semibold text-paper">Retained</h3>
           <p className="mt-3 font-mono text-xl font-semibold text-live">{formatMoney(earned.hiddenUsd)}</p>
-          <p className="mt-1 text-xs text-mist">{formatKes(usdToKes(earned.hiddenUsd, rate))}</p>
+          <p className="mt-1 text-xs text-mist">{formatKes(feeKes ?? usdToKes(earned.hiddenUsd, rate))}</p>
           <p className="mt-1 text-xs text-mist">
             {earned.hiddenCount} payment{earned.hiddenCount === 1 ? '' : 's'} with a fee
           </p>
@@ -546,7 +563,7 @@ function SuperadminDayEarnings({
         <Stat
           label="Net"
           value={formatMoney(earned.visibleUsd)}
-          subValue={formatKes(usdToKes(earned.visibleUsd, rate))}
+          subValue={formatKes(netKes ?? usdToKes(earned.visibleUsd, rate))}
           hint="What admins see for this day"
         />
         <Stat
@@ -560,7 +577,7 @@ function SuperadminDayEarnings({
         <p className="text-sm text-mist" data-testid="superadmin-day-earnings-fee-note">
           {earned.hiddenUsd === 0
             ? 'No 20% fee was recorded on this day.'
-            : `${formatMoney(earned.hiddenUsd)} is the 20% fee. Admins see the net, ${formatMoney(earned.visibleUsd)}.`}
+            : `${formatMoney(earned.hiddenUsd)} is the 20% fee${feeKes == null ? '' : ` (${formatEarnedKes(feeKes)})`}. Admins see the net, ${formatMoney(earned.visibleUsd)}${netKes == null ? '' : ` (${formatEarnedKes(netKes)})`}. Gross is ${grossKes == null ? formatKes(usdToKes(earned.fullUsd, rate)) : formatEarnedKes(grossKes)}.`}
         </p>
       ) : (
         <p className="text-sm text-mist" data-testid="superadmin-day-earnings-no-fee">

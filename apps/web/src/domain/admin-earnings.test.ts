@@ -20,6 +20,7 @@ import {
   shouldApplyHiddenCarve,
   shouldHideAdminEarnings,
   amountsWithoutHiddenShare,
+  earningsSplitFromRetainedKes,
   splitDepositEarnings,
   splitEarnedTotalKes,
   splitEqualPartners,
@@ -95,6 +96,9 @@ describe("splitDepositEarnings", () => {
     expect(reportingSplit(nov23.net, "2026-11-23T12:00:00.000Z").net).not.toBe(nov23.net);
     expect(nov23.net).toBe(54_320);
     expect(reportingSplit(6_500, "2026-11-21T20:54:00.000Z")).toEqual({ gross: 6_500, fee: 0, net: 6_500 });
+    expect(reportingSplit(6_500, "2026-11-24T12:00:00.000Z")).toEqual({ gross: 6_500, fee: 1_300, net: 5_200 });
+    expect(earningsSplitFromRetainedKes(54_320).sharedUsd).toBe(54_320);
+    expect(earningsSplitFromRetainedKes(54_320).hiddenUsd).toBe(0);
     const shown = withNetAmounts({
       amount_kes: 6_500,
       amount_usd: null,
