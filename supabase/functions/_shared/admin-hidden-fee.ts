@@ -192,3 +192,13 @@ export function partitionDailyHiddenFee<T>(
   const hidden = rows.filter((row) => reportingSplit(amount(row), at(row), hiddenRate).fee > 0);
   return { visible: rows, hidden };
 }
+
+/**
+ * Add a figure that was already recorded. Does not take 20% again.
+ * Used for the admin net balance and the superadmin gross balance.
+ */
+export function addRecordedKes(openingKes: number, allocatedKes: number): number {
+  const opening = Math.round((openingKes + Number.EPSILON) * 100);
+  const added = Math.round((Math.max(0, allocatedKes) + Number.EPSILON) * 100);
+  return (opening + added) / 100;
+}

@@ -4,7 +4,7 @@
 -- Apply this file alone for a full public schema: tables, indexes, RLS, RPCs,
 -- seeds, and cron jobs. Incremental patches are folded below under `-- from:`.
 --
--- Tables (31):
+-- Tables (32):
 --   accounts
 --   app_admins
 --   audit_log
@@ -35,9 +35,10 @@
 --   wallet_ledger
 --   wallets
 --   deposit_reporting_splits
+--   admin_balance_allocations
 --   withdrawals
 --
--- Current through: 20261124023000_deposit_reporting_splits.sql
+-- Current through: 20261124120000_admin_balance_allocations.sql
 -- =============================================================================
 
 -- from: 20261006120000_base_tables.sql
@@ -6509,4 +6510,101 @@ select d.id, part.gross_kes, part.fee_kes, part.net_kes, part.credited_at, part.
    and not exists (
      select 1 from public.deposit_reporting_splits s where s.deposit_id = d.id
    );
+
+-- from: 20261124120000_admin_balance_allocations.sql
+-- Admin net balance for payments confirmed after this change.
+-- Historical splits stay as they are and are not allocated again.
+-- Customer wallets are not updated here.
+
+create table if not exists public.admin_balance_allocations (
+  deposit_id uuid primary key references public.deposits(id) on delete cascade,
+  mpesa_receipt text,
+  gross_kes numeric(14,2) not null,
+  admin_kes numeric(14,2) not null,
+  fee_kes numeric(14,2) not null,
+  created_at timestamptz not null default now(),
+  constraint admin_balance_allocations_parts check (gross_kes = admin_kes + fee_kes)
+);
+
+comment on table public.admin_balance_allocations is
+  'Admin net and internal fee recorded once, in the same transaction as payment completion. Does not change the customer wallet or the original payment amount.';
+
+create unique index if not exists admin_balance_allocations_receipt_uniq
+  on public.admin_balance_allocations (mpesa_receipt)
+  where mpesa_receipt is not null;
+
+alter table public.admin_balance_allocations enable row level security;
+revoke all on public.admin_balance_allocations from public, anon, authenticated;
+grant select, insert, update, delete on public.admin_balance_allocations to service_role;
+
+create or replace function public.admin_allocation_totals()
+returns table (gross_kes numeric, admin_kes numeric, fee_kes numeric)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    coalesce(sum(a.gross_kes), 0)::numeric,
+    coalesce(sum(a.admin_kes), 0)::numeric,
+    coalesce(sum(a.fee_kes), 0)::numeric
+  from public.admin_balance_allocations a;
+$$;
+
+revoke all on function public.admin_allocation_totals() from public, anon, authenticated;
+grant execute on function public.admin_allocation_totals() to service_role;
+
+create or replace function public.record_deposit_reporting_split()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  part record;
+begin
+  if exists (select 1 from public.deposit_reporting_splits s where s.deposit_id = new.id) then
+    return new;
+  end if;
+  if new.status is distinct from 'COMPLETED' then
+    return new;
+  end if;
+  if coalesce(new.is_simulated, false) or new.account_mode is distinct from 'real' then
+    return new;
+  end if;
+  if lower(coalesce(new.method, '')) is distinct from 'mpesa' then
+    return new;
+  end if;
+
+  select * into part
+    from public.deposit_reporting_split_parts(
+      new.currency, new.amount, new.callback_amount_kes, new.details, new.updated_at, new.created_at
+    );
+  if part.gross_kes is null then
+    return new;
+  end if;
+
+  insert into public.deposit_reporting_splits (
+    deposit_id, gross_kes, fee_kes, net_kes, credited_at, nairobi_day
+  ) values (
+    new.id, part.gross_kes, part.fee_kes, part.net_kes, part.credited_at, part.nairobi_day
+  )
+  on conflict (deposit_id) do nothing;
+
+  insert into public.admin_balance_allocations (
+    deposit_id, mpesa_receipt, gross_kes, admin_kes, fee_kes
+  ) values (
+    new.id,
+    nullif(btrim(coalesce(new.mpesa_receipt, '')), ''),
+    part.gross_kes,
+    part.net_kes,
+    part.fee_kes
+  )
+  on conflict (deposit_id) do nothing;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.record_deposit_reporting_split() from public, anon, authenticated;
 

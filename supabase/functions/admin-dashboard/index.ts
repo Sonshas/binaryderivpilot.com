@@ -1,7 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import type { User } from 'npm:@supabase/supabase-js@2'
 import { collectedTotals, mergeJoinedUsers, splitMpesaDeposits, type DashboardDeposit } from '../_shared/admin-dashboard.ts'
-import { feeRecord, kesReportingSplit, nairobiDateKey, withCustomerPayment, withExplicitSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
+import { addRecordedKes, feeRecord, kesReportingSplit, nairobiDateKey, withCustomerPayment, withExplicitSplit, withNetAmounts } from '../_shared/admin-hidden-fee.ts'
 import { isAdmin } from '../_shared/admin-staff.ts'
 import { loadAdminDashboardSources } from '../_shared/direct-admin.ts'
 import { readPaymentSettings } from '../_shared/direct-money.ts'
@@ -53,6 +53,19 @@ function sumField(rows: DashboardDeposit[], pick: (row: DashboardDeposit) => num
 function settingsOverride(raw: string | undefined): boolean {
   const override = Number(raw)
   return Number.isFinite(override) && override > 0
+}
+
+/** Sum of net/gross already stored once at confirmation. Missing rows count as zero. */
+async function allocationTotals(admin: ReturnType<typeof adminClient>): Promise<{ grossKes: number; adminKes: number }> {
+  const { data, error } = await admin.rpc('admin_allocation_totals')
+  if (error) throw new Error(error.message)
+  const row = (Array.isArray(data) ? data[0] : data) as { gross_kes?: unknown; admin_kes?: unknown } | null
+  const grossKes = Number(row?.gross_kes ?? 0)
+  const adminKes = Number(row?.admin_kes ?? 0)
+  return {
+    grossKes: Number.isFinite(grossKes) ? grossKes : 0,
+    adminKes: Number.isFinite(adminKes) ? adminKes : 0,
+  }
 }
 
 function isRetainedCaller(user: User): boolean {
@@ -184,7 +197,15 @@ Deno.serve(async (req) => {
     const recordedKes = earnedTotalKes(settingsRaw, fullKes ?? totals.kes)
     // Override is gross, so regular admins get one 20% off that figure.
     // Without an override, the admin total is the sum of per-payment nets.
-    const adminEarned = settingsOverride(settingsRaw) ? visibleEarnedKes(recordedKes) : (netKes ?? visibleEarnedKes(recordedKes))
+    const allocated = await allocationTotals(admin)
+    // The override is already reduced once for regular admins. New payments add
+    // the net recorded at confirmation, not another 20% of that net.
+    const adminEarned = settingsOverride(settingsRaw)
+      ? addRecordedKes(visibleEarnedKes(recordedKes), allocated.adminKes)
+      : (netKes ?? visibleEarnedKes(recordedKes))
+    const superadminGross = settingsOverride(settingsRaw)
+      ? addRecordedKes(recordedKes, allocated.grossKes)
+      : recordedKes
     const customerTotals = collectedTotals(customerCollected)
     const earnedDays = earnedUsdByDay(netCollected)
     console.log('admin-dashboard overview', user.id, userCounts.lifetime, netCollected.length)
@@ -198,7 +219,7 @@ Deno.serve(async (req) => {
         totals: {
           collected_usd: totals.usd,
           collected_kes: recordedKes,
-          earned_total_kes: recordedKes,
+          earned_total_kes: superadminGross,
           hidden_kes: roundMoney(feeKes),
           collected_count: totals.count,
           user_count: userCounts.lifetime,
